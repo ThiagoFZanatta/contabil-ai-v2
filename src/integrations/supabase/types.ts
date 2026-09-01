@@ -8,6 +8,83 @@ export type Database = {
   };
   public: {
     Tables: {
+      appointments: {
+        Row: {
+          appointment_type: string;
+          client_id: string | null;
+          created_at: string;
+          duration_min: number;
+          id: string;
+          lead_id: string | null;
+          origin: string;
+          staff_id: string;
+          start_at: string;
+          tenant_id: string;
+          time_range: string | null;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          appointment_type?: string;
+          client_id?: string | null;
+          created_at?: string;
+          duration_min?: number;
+          id?: string;
+          lead_id?: string | null;
+          origin?: string;
+          staff_id: string;
+          start_at: string;
+          tenant_id: string;
+          time_range?: string | null;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          appointment_type?: string;
+          client_id?: string | null;
+          created_at?: string;
+          duration_min?: number;
+          id?: string;
+          lead_id?: string | null;
+          origin?: string;
+          staff_id?: string;
+          start_at?: string;
+          tenant_id?: string;
+          time_range?: string | null;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "appointments_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_lead_id_fkey";
+            columns: ["lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_staff_id_fkey";
+            columns: ["staff_id"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointments_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       client_contact_links: {
         Row: {
           client_id: string;
@@ -297,6 +374,60 @@ export type Database = {
           },
         ];
       };
+      leads: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          name: string;
+          reason: string;
+          segment: string;
+          stage: string;
+          tenant_id: string;
+          updated_at: string;
+          whatsapp_number: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name: string;
+          reason?: string;
+          segment?: string;
+          stage?: string;
+          tenant_id: string;
+          updated_at?: string;
+          whatsapp_number?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string;
+          reason?: string;
+          segment?: string;
+          stage?: string;
+          tenant_id?: string;
+          updated_at?: string;
+          whatsapp_number?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "leads_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "leads_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       staff: {
         Row: {
           created_at: string;
@@ -367,6 +498,51 @@ export type Database = {
             columns: ["staff_id"];
             isOneToOne: false;
             referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      staff_time_blocks: {
+        Row: {
+          created_at: string;
+          end_at: string;
+          id: string;
+          reason: string;
+          staff_id: string;
+          start_at: string;
+          tenant_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          end_at: string;
+          id?: string;
+          reason?: string;
+          staff_id: string;
+          start_at: string;
+          tenant_id: string;
+        };
+        Update: {
+          created_at?: string;
+          end_at?: string;
+          id?: string;
+          reason?: string;
+          staff_id?: string;
+          start_at?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "staff_time_blocks_staff_id_fkey";
+            columns: ["staff_id"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "staff_time_blocks_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
             referencedColumns: ["id"];
           },
         ];
