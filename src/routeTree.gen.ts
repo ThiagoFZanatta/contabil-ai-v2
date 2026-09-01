@@ -10,33 +10,180 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as EquipeRouteImport } from './routes/equipe'
+import { Route as EsqueciSenhaRouteImport } from './routes/esqueci-senha'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as NovaSenhaRouteImport } from './routes/nova-senha'
+import { Route as AgendaIndexRouteImport } from './routes/agenda/index'
+import { Route as ClientesIndexRouteImport } from './routes/clientes/index'
+import { Route as ClientesClienteIdRouteImport } from './routes/clientes/$clienteId'
+import { Route as ConfiguracoesIndexRouteImport } from './routes/configuracoes/index'
+import { Route as ConversasIndexRouteImport } from './routes/conversas/index'
+import { Route as LeadsIndexRouteImport } from './routes/leads/index'
+import { Route as RelatoriosIndexRouteImport } from './routes/relatorios/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EquipeRoute = EquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EsqueciSenhaRoute = EsqueciSenhaRouteImport.update({
+  id: '/esqueci-senha',
+  path: '/esqueci-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NovaSenhaRoute = NovaSenhaRouteImport.update({
+  id: '/nova-senha',
+  path: '/nova-senha',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgendaIndexRoute = AgendaIndexRouteImport.update({
+  id: '/agenda/',
+  path: '/agenda/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientesIndexRoute = ClientesIndexRouteImport.update({
+  id: '/clientes/',
+  path: '/clientes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientesClienteIdRoute = ClientesClienteIdRouteImport.update({
+  id: '/clientes/$clienteId',
+  path: '/clientes/$clienteId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesIndexRoute = ConfiguracoesIndexRouteImport.update({
+  id: '/configuracoes/',
+  path: '/configuracoes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConversasIndexRoute = ConversasIndexRouteImport.update({
+  id: '/conversas/',
+  path: '/conversas/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeadsIndexRoute = LeadsIndexRouteImport.update({
+  id: '/leads/',
+  path: '/leads/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RelatoriosIndexRoute = RelatoriosIndexRouteImport.update({
+  id: '/relatorios/',
+  path: '/relatorios/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/equipe': typeof EquipeRoute
+  '/esqueci-senha': typeof EsqueciSenhaRoute
+  '/login': typeof LoginRoute
+  '/nova-senha': typeof NovaSenhaRoute
+  '/clientes/$clienteId': typeof ClientesClienteIdRoute
+  '/agenda/': typeof AgendaIndexRoute
+  '/clientes/': typeof ClientesIndexRoute
+  '/configuracoes/': typeof ConfiguracoesIndexRoute
+  '/conversas/': typeof ConversasIndexRoute
+  '/leads/': typeof LeadsIndexRoute
+  '/relatorios/': typeof RelatoriosIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/equipe': typeof EquipeRoute
+  '/esqueci-senha': typeof EsqueciSenhaRoute
+  '/login': typeof LoginRoute
+  '/nova-senha': typeof NovaSenhaRoute
+  '/clientes/$clienteId': typeof ClientesClienteIdRoute
+  '/agenda': typeof AgendaIndexRoute
+  '/clientes': typeof ClientesIndexRoute
+  '/configuracoes': typeof ConfiguracoesIndexRoute
+  '/conversas': typeof ConversasIndexRoute
+  '/leads': typeof LeadsIndexRoute
+  '/relatorios': typeof RelatoriosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/equipe': typeof EquipeRoute
+  '/esqueci-senha': typeof EsqueciSenhaRoute
+  '/login': typeof LoginRoute
+  '/nova-senha': typeof NovaSenhaRoute
+  '/clientes/$clienteId': typeof ClientesClienteIdRoute
+  '/agenda/': typeof AgendaIndexRoute
+  '/clientes/': typeof ClientesIndexRoute
+  '/configuracoes/': typeof ConfiguracoesIndexRoute
+  '/conversas/': typeof ConversasIndexRoute
+  '/leads/': typeof LeadsIndexRoute
+  '/relatorios/': typeof RelatoriosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/equipe'
+    | '/esqueci-senha'
+    | '/login'
+    | '/nova-senha'
+    | '/clientes/$clienteId'
+    | '/agenda/'
+    | '/clientes/'
+    | '/configuracoes/'
+    | '/conversas/'
+    | '/leads/'
+    | '/relatorios/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/equipe'
+    | '/esqueci-senha'
+    | '/login'
+    | '/nova-senha'
+    | '/clientes/$clienteId'
+    | '/agenda'
+    | '/clientes'
+    | '/configuracoes'
+    | '/conversas'
+    | '/leads'
+    | '/relatorios'
+  id:
+    | '__root__'
+    | '/'
+    | '/equipe'
+    | '/esqueci-senha'
+    | '/login'
+    | '/nova-senha'
+    | '/clientes/$clienteId'
+    | '/agenda/'
+    | '/clientes/'
+    | '/configuracoes/'
+    | '/conversas/'
+    | '/leads/'
+    | '/relatorios/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EquipeRoute: typeof EquipeRoute
+  EsqueciSenhaRoute: typeof EsqueciSenhaRoute
+  LoginRoute: typeof LoginRoute
+  NovaSenhaRoute: typeof NovaSenhaRoute
+  ClientesClienteIdRoute: typeof ClientesClienteIdRoute
+  AgendaIndexRoute: typeof AgendaIndexRoute
+  ClientesIndexRoute: typeof ClientesIndexRoute
+  ConfiguracoesIndexRoute: typeof ConfiguracoesIndexRoute
+  ConversasIndexRoute: typeof ConversasIndexRoute
+  LeadsIndexRoute: typeof LeadsIndexRoute
+  RelatoriosIndexRoute: typeof RelatoriosIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +195,99 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/equipe': {
+      id: '/equipe'
+      path: '/equipe'
+      fullPath: '/equipe'
+      preLoaderRoute: typeof EquipeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/esqueci-senha': {
+      id: '/esqueci-senha'
+      path: '/esqueci-senha'
+      fullPath: '/esqueci-senha'
+      preLoaderRoute: typeof EsqueciSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nova-senha': {
+      id: '/nova-senha'
+      path: '/nova-senha'
+      fullPath: '/nova-senha'
+      preLoaderRoute: typeof NovaSenhaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agenda/': {
+      id: '/agenda/'
+      path: '/agenda'
+      fullPath: '/agenda/'
+      preLoaderRoute: typeof AgendaIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clientes/': {
+      id: '/clientes/'
+      path: '/clientes'
+      fullPath: '/clientes/'
+      preLoaderRoute: typeof ClientesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clientes/$clienteId': {
+      id: '/clientes/$clienteId'
+      path: '/clientes/$clienteId'
+      fullPath: '/clientes/$clienteId'
+      preLoaderRoute: typeof ClientesClienteIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes/': {
+      id: '/configuracoes/'
+      path: '/configuracoes'
+      fullPath: '/configuracoes/'
+      preLoaderRoute: typeof ConfiguracoesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conversas/': {
+      id: '/conversas/'
+      path: '/conversas'
+      fullPath: '/conversas/'
+      preLoaderRoute: typeof ConversasIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leads/': {
+      id: '/leads/'
+      path: '/leads'
+      fullPath: '/leads/'
+      preLoaderRoute: typeof LeadsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relatorios/': {
+      id: '/relatorios/'
+      path: '/relatorios'
+      fullPath: '/relatorios/'
+      preLoaderRoute: typeof RelatoriosIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EquipeRoute: EquipeRoute,
+  EsqueciSenhaRoute: EsqueciSenhaRoute,
+  LoginRoute: LoginRoute,
+  NovaSenhaRoute: NovaSenhaRoute,
+  ClientesClienteIdRoute: ClientesClienteIdRoute,
+  AgendaIndexRoute: AgendaIndexRoute,
+  ClientesIndexRoute: ClientesIndexRoute,
+  ConfiguracoesIndexRoute: ConfiguracoesIndexRoute,
+  ConversasIndexRoute: ConversasIndexRoute,
+  LeadsIndexRoute: LeadsIndexRoute,
+  RelatoriosIndexRoute: RelatoriosIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
