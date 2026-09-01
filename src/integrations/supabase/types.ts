@@ -547,6 +547,77 @@ export type Database = {
           },
         ];
       };
+      tenant_integration_secrets: {
+        Row: {
+          provider: string;
+          secret_value: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          provider: string;
+          secret_value: string;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          provider?: string;
+          secret_value?: string;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tenant_integration_secrets_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      tenant_integrations: {
+        Row: {
+          is_configured: boolean;
+          metadata: Json;
+          provider: string;
+          tenant_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          is_configured?: boolean;
+          metadata?: Json;
+          provider: string;
+          tenant_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          is_configured?: boolean;
+          metadata?: Json;
+          provider?: string;
+          tenant_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tenant_integrations_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tenant_integrations_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       tenants: {
         Row: {
           created_at: string;
