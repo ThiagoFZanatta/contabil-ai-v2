@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   MessagesSquare,
@@ -38,7 +38,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { conversations, currentStaff } from "@/lib/mock-data";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useCurrentStaff } from "@/hooks/use-current-staff";
+import { supabase } from "@/integrations/supabase/client";
+import { conversations } from "@/lib/mock-data";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -54,6 +57,11 @@ const adminItems = [
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
+function initialsOf(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return (parts[0]?.[0] ?? "") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "");
+}
+
 export function AppShell({
   children,
   title,
@@ -64,14 +72,33 @@ export function AppShell({
   description?: string;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const queueCount = conversations.filter((c) =>
-    currentStaff.departamentos.includes(c.departamento),
-  ).length;
+  const navigate = useNavigate();
+  const session = useCurrentStaff();
+
+  const queueCount =
+    session.status === "ready"
+      ? conversations.filter((c) => session.staff.departmentSlugs.includes(c.departamento)).length
+      : 0;
 
   function isActive(to: string) {
     if (to === "/") return pathname === "/";
     return pathname.startsWith(to);
   }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    navigate({ to: "/login" });
+  }
+
+  if (session.status !== "ready") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Skeleton className="size-10 rounded-full" />
+      </div>
+    );
+  }
+
+  const { staff } = session;
 
   return (
     <SidebarProvider>
@@ -132,16 +159,14 @@ export function AppShell({
               <button className="flex w-full items-center gap-2 rounded-md p-2 text-left hover:bg-sidebar-accent cursor-pointer">
                 <Avatar className="size-7">
                   <AvatarFallback className="bg-primary text-xs text-primary-foreground">
-                    {currentStaff.iniciais}
+                    {initialsOf(staff.name).toUpperCase() || "?"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 group-data-[collapsible=icon]:hidden">
                   <p className="truncate text-xs font-medium text-sidebar-foreground">
-                    {currentStaff.nome}
+                    {staff.name}
                   </p>
-                  <p className="truncate text-[11px] text-sidebar-foreground/60">
-                    {currentStaff.email}
-                  </p>
+                  <p className="truncate text-[11px] text-sidebar-foreground/60">{staff.email}</p>
                 </div>
               </button>
             </DropdownMenuTrigger>
@@ -153,10 +178,8 @@ export function AppShell({
                   <UserPlus /> Gestão de equipe
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/login">
-                  <LogOut /> Sair
-                </Link>
+              <DropdownMenuItem onSelect={handleSignOut}>
+                <LogOut /> Sair
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

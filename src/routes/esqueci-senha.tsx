@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Loader2, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FloatingInput } from "@/components/common/floating-input";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/esqueci-senha")({
   component: EsqueciSenhaPage,
@@ -13,14 +14,17 @@ function EsqueciSenhaPage() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email) return;
     setLoading(true);
-    window.setTimeout(() => {
-      setLoading(false);
-      setSent(true);
-    }, 900);
+    // Supabase não revela se o e-mail existe ou não na base (RF01) — o
+    // resultado exibido ao usuário é sempre o mesmo, independente do erro.
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/nova-senha`,
+    });
+    setLoading(false);
+    setSent(true);
   }
 
   return (
