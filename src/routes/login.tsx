@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AlertCircle, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FloatingInput } from "@/components/common/floating-input";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -15,23 +16,28 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!email || !senha) {
+      setError("Preencha e-mail e senha para continuar.");
+      return;
+    }
+
     setLoading(true);
-    window.setTimeout(() => {
-      if (!email || !senha) {
-        setError("Preencha e-mail e senha para continuar.");
-        setLoading(false);
-        return;
-      }
-      if (senha.length < 6) {
-        setError("E-mail ou senha inválidos. Verifique e tente novamente.");
-        setLoading(false);
-        return;
-      }
-      navigate({ to: "/" });
-    }, 900);
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: senha,
+    });
+    setLoading(false);
+
+    if (signInError) {
+      setError("E-mail ou senha inválidos. Verifique e tente novamente.");
+      return;
+    }
+
+    navigate({ to: "/" });
   }
 
   return (
