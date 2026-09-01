@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { BookOpen, Bot, FileText, Plus, ScrollText, Sparkles, Trash2, Upload } from "lucide-react";
@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useCurrentStaff } from "@/hooks/use-current-staff";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
   SelectContent,
@@ -37,13 +40,19 @@ import {
 import { cn } from "@/lib/utils";
 import {
   consentVersions,
-  documentCatalog,
   faqs as faqsSeed,
   kbDocuments,
   messageTemplates,
-  type DocumentCatalogItem,
   type TemplateStatus,
 } from "@/lib/mock-data";
+
+type Periodicity = "mensal" | "trimestral" | "anual" | "sob_demanda";
+
+interface CatalogItem {
+  id: string;
+  name: string;
+  periodicity: Periodicity;
+}
 
 export const Route = createFileRoute("/configuracoes/")({
   component: ConfiguracoesPage,
@@ -66,8 +75,11 @@ const templateStatusStyle: Record<TemplateStatus, string> = {
 };
 
 function ConfiguracoesPage() {
+  const session = useCurrentStaff();
+  const tenantId = session.status === "ready" ? session.staff.tenantId : null;
+
   const [active, setActive] = useState<SectionKey>("documentos");
-  const [catalog, setCatalog] = useState<DocumentCatalogItem[]>(documentCatalog);
+  const [catalog, setCatalog] = useState<CatalogItem[] | null>(null);
   const [agentName, setAgentName] = useState("Nara");
   const [agentTone, setAgentTone] = useState(
     "Amigável, direto e profissional. Evita jargão técnico sem necessidade e sempre confirma antes de agir.",
@@ -75,11 +87,67 @@ function ConfiguracoesPage() {
   const [consentText, setConsentText] = useState(consentVersions[0]!.texto);
   const [faqs, setFaqs] = useState(faqsSeed);
 
-  function addCatalogItem() {
+  useEffect(() => {
+    if (!tenantId) return;
+    supabase
+      .from("document_catalog")
+      .select("id, name, default_periodicity")
+      .eq("tenant_id", tenantId)
+      .order("name")
+      .then(({ data }) => {
+        setCatalog(
+          (data ?? []).map((d) => ({
+            id: d.id,
+            name: d.name,
+            periodicity: d.default_periodicity as Periodicity,
+          })),
+        );
+      });
+  }, [tenantId]);
+
+  async function addCatalogItem() {
+    if (!tenantId) return;
+    const { data, error } = await supabase
+      .from("document_catalog")
+      .insert({
+        tenant_id: tenantId,
+        name: "Novo tipo de documento",
+        default_periodicity: "mensal",
+      })
+      .select("id, name, default_periodicity")
+      .single();
+    if (error || !data) {
+      toast.error("Não foi possível adicionar o item.");
+      return;
+    }
     setCatalog((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), nome: "Novo tipo de documento", periodicidadePadrao: "mensal" },
+      ...(prev ?? []),
+      { id: data.id, name: data.name, periodicity: data.default_periodicity as Periodicity },
     ]);
+  }
+
+  async function renameCatalogItem(id: string, name: string) {
+    setCatalog((prev) => (prev ?? []).map((c) => (c.id === id ? { ...c, name } : c)));
+    const { error } = await supabase.from("document_catalog").update({ name }).eq("id", id);
+    if (error) toast.error("Não foi possível renomear o item.");
+  }
+
+  async function changeCatalogPeriodicity(id: string, periodicity: Periodicity) {
+    setCatalog((prev) => (prev ?? []).map((c) => (c.id === id ? { ...c, periodicity } : c)));
+    const { error } = await supabase
+      .from("document_catalog")
+      .update({ default_periodicity: periodicity })
+      .eq("id", id);
+    if (error) toast.error("Não foi possível salvar a periodicidade.");
+  }
+
+  async function removeCatalogItem(id: string) {
+    const { error } = await supabase.from("document_catalog").delete().eq("id", id);
+    if (error) {
+      toast.error("Não foi possível remover o item.");
+      return;
+    }
+    setCatalog((prev) => (prev ?? []).filter((c) => c.id !== id));
   }
 
   return (
@@ -122,53 +190,48 @@ function ConfiguracoesPage() {
                   <Plus /> Adicionar item
                 </Button>
               </div>
-              <ul className="divide-y divide-border rounded-lg border border-border">
-                {catalog.map((item) => (
-                  <li key={item.id} className="flex items-center gap-3 p-3">
-                    <Input
-                      defaultValue={item.nome}
-                      className="h-8 flex-1 text-sm"
-                      onBlur={(e) => {
-                        const nome = e.target.value;
-                        setCatalog((prev) =>
-                          prev.map((c) => (c.id === item.id ? { ...c, nome } : c)),
-                        );
-                      }}
-                    />
-                    <Select
-                      defaultValue={item.periodicidadePadrao}
-                      onValueChange={(v) =>
-                        setCatalog((prev) =>
-                          prev.map((c) =>
-                            c.id === item.id
-                              ? { ...c, periodicidadePadrao: v as typeof c.periodicidadePadrao }
-                              : c,
-                          ),
-                        )
-                      }
-                    >
-                      <SelectTrigger className="h-8 w-36 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="mensal">Mensal</SelectItem>
-                        <SelectItem value="trimestral">Trimestral</SelectItem>
-                        <SelectItem value="anual">Anual</SelectItem>
-                        <SelectItem value="sob_demanda">Sob demanda</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => setCatalog((prev) => prev.filter((c) => c.id !== item.id))}
-                      aria-label="Remover"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              {catalog === null ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <ul className="divide-y divide-border rounded-lg border border-border">
+                  {catalog.map((item) => (
+                    <li key={item.id} className="flex items-center gap-3 p-3">
+                      <Input
+                        defaultValue={item.name}
+                        className="h-8 flex-1 text-sm"
+                        onBlur={(e) => renameCatalogItem(item.id, e.target.value)}
+                      />
+                      <Select
+                        value={item.periodicity}
+                        onValueChange={(v) => changeCatalogPeriodicity(item.id, v as Periodicity)}
+                      >
+                        <SelectTrigger className="h-8 w-36 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="mensal">Mensal</SelectItem>
+                          <SelectItem value="trimestral">Trimestral</SelectItem>
+                          <SelectItem value="anual">Anual</SelectItem>
+                          <SelectItem value="sob_demanda">Sob demanda</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeCatalogItem(item.id)}
+                        aria-label="Remover"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
