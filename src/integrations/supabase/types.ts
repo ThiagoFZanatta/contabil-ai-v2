@@ -8,367 +8,24 @@ export type Database = {
   };
   public: {
     Tables: {
-      tenants: {
-        Row: {
-          id: string;
-          name: string;
-          plan: string;
-          whatsapp_number: string | null;
-          meta_verification_status: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          plan?: string;
-          whatsapp_number?: string | null;
-          meta_verification_status?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          plan?: string;
-          whatsapp_number?: string | null;
-          meta_verification_status?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
-      staff: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          name: string;
-          email: string;
-          is_admin: boolean;
-          status: string;
-          invited_at: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id: string;
-          tenant_id: string;
-          name: string;
-          email: string;
-          is_admin?: boolean;
-          status?: string;
-          invited_at?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          name?: string;
-          email?: string;
-          is_admin?: boolean;
-          status?: string;
-          invited_at?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "staff_tenant_id_fkey";
-            columns: ["tenant_id"];
-            isOneToOne: false;
-            referencedRelation: "tenants";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      departments: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          slug: string;
-          name: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id: string;
-          slug: string;
-          name: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          slug?: string;
-          name?: string;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "departments_tenant_id_fkey";
-            columns: ["tenant_id"];
-            isOneToOne: false;
-            referencedRelation: "tenants";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      staff_departments: {
-        Row: {
-          staff_id: string;
-          department_id: string;
-        };
-        Insert: {
-          staff_id: string;
-          department_id: string;
-        };
-        Update: {
-          staff_id?: string;
-          department_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "staff_departments_staff_id_fkey";
-            columns: ["staff_id"];
-            isOneToOne: false;
-            referencedRelation: "staff";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "staff_departments_department_id_fkey";
-            columns: ["department_id"];
-            isOneToOne: false;
-            referencedRelation: "departments";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      clients: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          name: string;
-          cnpj: string;
-          tax_regime: string;
-          whatsapp_number: string;
-          responsible_staff_id: string | null;
-          notes: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id: string;
-          name: string;
-          cnpj: string;
-          tax_regime: string;
-          whatsapp_number: string;
-          responsible_staff_id?: string | null;
-          notes?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          name?: string;
-          cnpj?: string;
-          tax_regime?: string;
-          whatsapp_number?: string;
-          responsible_staff_id?: string | null;
-          notes?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "clients_tenant_id_fkey";
-            columns: ["tenant_id"];
-            isOneToOne: false;
-            referencedRelation: "tenants";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "clients_responsible_staff_id_fkey";
-            columns: ["responsible_staff_id"];
-            isOneToOne: false;
-            referencedRelation: "staff";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      document_catalog: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          name: string;
-          default_periodicity: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id: string;
-          name: string;
-          default_periodicity?: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          name?: string;
-          default_periodicity?: string;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "document_catalog_tenant_id_fkey";
-            columns: ["tenant_id"];
-            isOneToOne: false;
-            referencedRelation: "tenants";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      client_document_config: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          client_id: string;
-          catalog_id: string | null;
-          name: string;
-          periodicity: string;
-          enabled: boolean;
-          next_due_date: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id: string;
-          client_id: string;
-          catalog_id?: string | null;
-          name: string;
-          periodicity?: string;
-          enabled?: boolean;
-          next_due_date?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          client_id?: string;
-          catalog_id?: string | null;
-          name?: string;
-          periodicity?: string;
-          enabled?: boolean;
-          next_due_date?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "client_document_config_client_id_fkey";
-            columns: ["client_id"];
-            isOneToOne: false;
-            referencedRelation: "clients";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "client_document_config_catalog_id_fkey";
-            columns: ["catalog_id"];
-            isOneToOne: false;
-            referencedRelation: "document_catalog";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      document_submissions: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          client_document_config_id: string;
-          submitted_at: string;
-          note: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id: string;
-          client_document_config_id: string;
-          submitted_at?: string;
-          note?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          client_document_config_id?: string;
-          submitted_at?: string;
-          note?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "document_submissions_client_document_config_id_fkey";
-            columns: ["client_document_config_id"];
-            isOneToOne: false;
-            referencedRelation: "client_document_config";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      contacts: {
-        Row: {
-          id: string;
-          tenant_id: string;
-          name: string;
-          whatsapp_number: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          tenant_id: string;
-          name: string;
-          whatsapp_number: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          tenant_id?: string;
-          name?: string;
-          whatsapp_number?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "contacts_tenant_id_fkey";
-            columns: ["tenant_id"];
-            isOneToOne: false;
-            referencedRelation: "tenants";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       client_contact_links: {
         Row: {
           client_id: string;
           contact_id: string;
-          role_label: string;
           created_at: string;
+          role_label: string;
         };
         Insert: {
           client_id: string;
           contact_id: string;
-          role_label?: string;
           created_at?: string;
+          role_label?: string;
         };
         Update: {
           client_id?: string;
           contact_id?: string;
-          role_label?: string;
           created_at?: string;
+          role_label?: string;
         };
         Relationships: [
           {
@@ -387,19 +44,389 @@ export type Database = {
           },
         ];
       };
+      client_document_config: {
+        Row: {
+          catalog_id: string | null;
+          client_id: string;
+          created_at: string;
+          enabled: boolean;
+          id: string;
+          name: string;
+          next_due_date: string | null;
+          periodicity: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          catalog_id?: string | null;
+          client_id: string;
+          created_at?: string;
+          enabled?: boolean;
+          id?: string;
+          name: string;
+          next_due_date?: string | null;
+          periodicity?: string;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          catalog_id?: string | null;
+          client_id?: string;
+          created_at?: string;
+          enabled?: boolean;
+          id?: string;
+          name?: string;
+          next_due_date?: string | null;
+          periodicity?: string;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "client_document_config_catalog_id_fkey";
+            columns: ["catalog_id"];
+            isOneToOne: false;
+            referencedRelation: "document_catalog";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_document_config_client_id_fkey";
+            columns: ["client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "client_document_config_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      clients: {
+        Row: {
+          cnpj: string;
+          created_at: string;
+          id: string;
+          name: string;
+          notes: string;
+          responsible_staff_id: string | null;
+          tax_regime: string;
+          tenant_id: string;
+          updated_at: string;
+          whatsapp_number: string;
+        };
+        Insert: {
+          cnpj: string;
+          created_at?: string;
+          id?: string;
+          name: string;
+          notes?: string;
+          responsible_staff_id?: string | null;
+          tax_regime: string;
+          tenant_id: string;
+          updated_at?: string;
+          whatsapp_number: string;
+        };
+        Update: {
+          cnpj?: string;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          notes?: string;
+          responsible_staff_id?: string | null;
+          tax_regime?: string;
+          tenant_id?: string;
+          updated_at?: string;
+          whatsapp_number?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "clients_responsible_staff_id_fkey";
+            columns: ["responsible_staff_id"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "clients_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      contacts: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          tenant_id: string;
+          updated_at: string;
+          whatsapp_number: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          tenant_id: string;
+          updated_at?: string;
+          whatsapp_number: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          tenant_id?: string;
+          updated_at?: string;
+          whatsapp_number?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contacts_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      departments: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          slug: string;
+          tenant_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          slug: string;
+          tenant_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          slug?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "departments_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      document_catalog: {
+        Row: {
+          created_at: string;
+          default_periodicity: string;
+          id: string;
+          name: string;
+          tenant_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          default_periodicity?: string;
+          id?: string;
+          name: string;
+          tenant_id: string;
+        };
+        Update: {
+          created_at?: string;
+          default_periodicity?: string;
+          id?: string;
+          name?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "document_catalog_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      document_submissions: {
+        Row: {
+          client_document_config_id: string;
+          id: string;
+          note: string;
+          submitted_at: string;
+          tenant_id: string;
+        };
+        Insert: {
+          client_document_config_id: string;
+          id?: string;
+          note?: string;
+          submitted_at?: string;
+          tenant_id: string;
+        };
+        Update: {
+          client_document_config_id?: string;
+          id?: string;
+          note?: string;
+          submitted_at?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "document_submissions_client_document_config_id_fkey";
+            columns: ["client_document_config_id"];
+            isOneToOne: false;
+            referencedRelation: "client_document_config";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "document_submissions_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      staff: {
+        Row: {
+          created_at: string;
+          email: string;
+          id: string;
+          invited_at: string;
+          is_admin: boolean;
+          name: string;
+          status: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          email: string;
+          id: string;
+          invited_at?: string;
+          is_admin?: boolean;
+          name: string;
+          status?: string;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          email?: string;
+          id?: string;
+          invited_at?: string;
+          is_admin?: boolean;
+          name?: string;
+          status?: string;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "staff_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      staff_departments: {
+        Row: {
+          department_id: string;
+          staff_id: string;
+        };
+        Insert: {
+          department_id: string;
+          staff_id: string;
+        };
+        Update: {
+          department_id?: string;
+          staff_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "staff_departments_department_id_fkey";
+            columns: ["department_id"];
+            isOneToOne: false;
+            referencedRelation: "departments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "staff_departments_staff_id_fkey";
+            columns: ["staff_id"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      tenants: {
+        Row: {
+          created_at: string;
+          id: string;
+          meta_verification_status: string;
+          name: string;
+          plan: string;
+          updated_at: string;
+          whatsapp_number: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          meta_verification_status?: string;
+          name: string;
+          plan?: string;
+          updated_at?: string;
+          whatsapp_number?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          meta_verification_status?: string;
+          name?: string;
+          plan?: string;
+          updated_at?: string;
+          whatsapp_number?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
     Functions: {
-      current_tenant_id: {
-        Args: Record<PropertyKey, never>;
-        Returns: string;
-      };
       accept_staff_invite: {
-        Args: { p_name?: string | null };
-        Returns: Database["public"]["Tables"]["staff"]["Row"];
+        Args: { p_name?: string };
+        Returns: {
+          created_at: string;
+          email: string;
+          id: string;
+          invited_at: string;
+          is_admin: boolean;
+          name: string;
+          status: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "staff";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
+      current_tenant_id: { Args: never; Returns: string };
     };
     Enums: {
       [_ in never]: never;
