@@ -1,7 +1,23 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { BookOpen, Bot, FileText, Plus, ScrollText, Sparkles, Trash2, Upload } from "lucide-react";
+import {
+  BookOpen,
+  Bot,
+  CheckCircle2,
+  FileText,
+  KeyRound,
+  Loader2,
+  Mail,
+  MessageCircle,
+  Plug,
+  Plus,
+  ScrollText,
+  Sparkles,
+  Trash2,
+  Upload,
+  XCircle,
+} from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +27,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useCurrentStaff } from "@/hooks/use-current-staff";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  removeIntegrationCredential,
+  saveAnthropicCredential,
+  saveWhatsAppCredential,
+  testAnthropicConnection,
+  testWhatsAppConnection,
+} from "@/lib/integration-actions";
 import {
   Select,
   SelectContent,
@@ -60,6 +83,7 @@ export const Route = createFileRoute("/configuracoes/")({
 
 const sections = [
   { key: "documentos", label: "Catálogo de Documentos", icon: FileText },
+  { key: "integracoes", label: "Integrações", icon: Plug },
   { key: "agente", label: "Agente de IA", icon: Bot },
   { key: "conhecimento", label: "Base de Conhecimento", icon: BookOpen },
   { key: "consentimento", label: "Consentimento e Privacidade", icon: ScrollText },
@@ -74,12 +98,56 @@ const templateStatusStyle: Record<TemplateStatus, string> = {
   rejeitado: "bg-destructive/10 text-destructive border-destructive/30",
 };
 
+const metaVerificationLabel: Record<string, string> = {
+  pending: "Pendente",
+  in_review: "Em análise pela Meta",
+  verified: "Verificado",
+  rejected: "Rejeitado",
+};
+
+const metaVerificationStyle: Record<string, string> = {
+  pending: "bg-warning/20 text-warning-foreground border-warning/40",
+  in_review: "bg-warning/20 text-warning-foreground border-warning/40",
+  verified: "bg-success/15 text-success border-success/30",
+  rejected: "bg-destructive/10 text-destructive border-destructive/30",
+};
+
+interface IntegrationStatus {
+  isConfigured: boolean;
+  metadata: Record<string, unknown>;
+}
+
+type ConnectionTestResult = { ok: true; detail: string } | { ok: false; error: string };
+
 function ConfiguracoesPage() {
   const session = useCurrentStaff();
   const tenantId = session.status === "ready" ? session.staff.tenantId : null;
 
   const [active, setActive] = useState<SectionKey>("documentos");
   const [catalog, setCatalog] = useState<CatalogItem[] | null>(null);
+
+  const [tenantWhatsappNumber, setTenantWhatsappNumber] = useState<string | null>(null);
+  const [tenantMetaStatus, setTenantMetaStatus] = useState<string>("pending");
+  const [integrations, setIntegrations] = useState<Record<
+    "whatsapp" | "anthropic",
+    IntegrationStatus
+  > | null>(null);
+
+  const [whatsappForm, setWhatsappForm] = useState({
+    phoneNumberId: "",
+    wabaId: "",
+    phoneNumber: "",
+    accessToken: "",
+  });
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
+
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [savingAnthropic, setSavingAnthropic] = useState(false);
+  const [testingWhatsapp, setTestingWhatsapp] = useState(false);
+  const [testingAnthropic, setTestingAnthropic] = useState(false);
+  const [whatsappTestResult, setWhatsappTestResult] = useState<ConnectionTestResult | null>(null);
+  const [anthropicTestResult, setAnthropicTestResult] = useState<ConnectionTestResult | null>(null);
+
   const [agentName, setAgentName] = useState("Nara");
   const [agentTone, setAgentTone] = useState(
     "Amigável, direto e profissional. Evita jargão técnico sem necessidade e sempre confirma antes de agir.",
@@ -104,6 +172,140 @@ function ConfiguracoesPage() {
         );
       });
   }, [tenantId]);
+
+  async function loadIntegrations(id: string) {
+    const [{ data: tenantRow }, { data: integrationRows }] = await Promise.all([
+      supabase
+        .from("tenants")
+        .select("whatsapp_number, meta_verification_status")
+        .eq("id", id)
+        .single(),
+      supabase
+        .from("tenant_integrations")
+        .select("provider, is_configured, metadata")
+        .eq("tenant_id", id),
+    ]);
+
+    if (tenantRow) {
+      setTenantWhatsappNumber(tenantRow.whatsapp_number);
+      setTenantMetaStatus(tenantRow.meta_verification_status);
+    }
+
+    const next: Record<"whatsapp" | "anthropic", IntegrationStatus> = {
+      whatsapp: { isConfigured: false, metadata: {} },
+      anthropic: { isConfigured: false, metadata: {} },
+    };
+    for (const row of integrationRows ?? []) {
+      if (row.provider === "whatsapp" || row.provider === "anthropic") {
+        next[row.provider] = {
+          isConfigured: row.is_configured,
+          metadata: (row.metadata ?? {}) as Record<string, unknown>,
+        };
+      }
+    }
+    setIntegrations(next);
+    setWhatsappForm((prev) => ({
+      ...prev,
+      phoneNumberId: (next.whatsapp.metadata["phone_number_id"] as string) ?? "",
+      wabaId: (next.whatsapp.metadata["waba_id"] as string) ?? "",
+      phoneNumber: tenantRow?.whatsapp_number ?? "",
+    }));
+  }
+
+  useEffect(() => {
+    if (!tenantId) return;
+    loadIntegrations(tenantId);
+  }, [tenantId]);
+
+  async function handleSaveWhatsapp() {
+    setSavingWhatsapp(true);
+    setWhatsappTestResult(null);
+    try {
+      await saveWhatsAppCredential({ data: whatsappForm });
+      toast.success("Integração com o WhatsApp salva.");
+      setWhatsappForm((prev) => ({ ...prev, accessToken: "" }));
+      if (tenantId) await loadIntegrations(tenantId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível salvar a integração.");
+    } finally {
+      setSavingWhatsapp(false);
+    }
+  }
+
+  async function handleRemoveWhatsapp() {
+    setSavingWhatsapp(true);
+    try {
+      await removeIntegrationCredential({ data: { provider: "whatsapp" } });
+      toast.success("Integração com o WhatsApp desativada.");
+      setWhatsappTestResult(null);
+      if (tenantId) await loadIntegrations(tenantId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível desativar a integração.");
+    } finally {
+      setSavingWhatsapp(false);
+    }
+  }
+
+  async function handleTestWhatsapp() {
+    setTestingWhatsapp(true);
+    setWhatsappTestResult(null);
+    try {
+      const result = await testWhatsAppConnection();
+      setWhatsappTestResult(result);
+    } catch (err) {
+      setWhatsappTestResult({
+        ok: false,
+        error: err instanceof Error ? err.message : "Falha ao testar a conexão.",
+      });
+    } finally {
+      setTestingWhatsapp(false);
+    }
+  }
+
+  async function handleSaveAnthropic() {
+    setSavingAnthropic(true);
+    setAnthropicTestResult(null);
+    try {
+      await saveAnthropicCredential({ data: { apiKey: anthropicApiKey } });
+      toast.success("Integração com a Anthropic salva.");
+      setAnthropicApiKey("");
+      if (tenantId) await loadIntegrations(tenantId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível salvar a integração.");
+    } finally {
+      setSavingAnthropic(false);
+    }
+  }
+
+  async function handleRemoveAnthropic() {
+    setSavingAnthropic(true);
+    try {
+      await removeIntegrationCredential({ data: { provider: "anthropic" } });
+      toast.success("Integração com a Anthropic desativada.");
+      setAnthropicTestResult(null);
+      if (tenantId) await loadIntegrations(tenantId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível desativar a integração.");
+    } finally {
+      setSavingAnthropic(false);
+    }
+  }
+
+  async function handleTestAnthropic() {
+    setTestingAnthropic(true);
+    setAnthropicTestResult(null);
+    try {
+      const result = await testAnthropicConnection();
+      setAnthropicTestResult(result);
+    } catch (err) {
+      setAnthropicTestResult({
+        ok: false,
+        error: err instanceof Error ? err.message : "Falha ao testar a conexão.",
+      });
+    } finally {
+      setTestingAnthropic(false);
+    }
+  }
 
   async function addCatalogItem() {
     if (!tenantId) return;
@@ -148,6 +350,14 @@ function ConfiguracoesPage() {
       return;
     }
     setCatalog((prev) => (prev ?? []).filter((c) => c.id !== id));
+  }
+
+  if (session.status !== "ready") {
+    return (
+      <AppShell title="Configurações">
+        <Skeleton className="h-64 w-full" />
+      </AppShell>
+    );
   }
 
   return (
@@ -232,6 +442,290 @@ function ConfiguracoesPage() {
                   ))}
                 </ul>
               )}
+            </div>
+          )}
+
+          {active === "integracoes" && (
+            <div className="space-y-6">
+              {!session.staff.isAdmin && (
+                <p className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground">
+                  Apenas administradores podem alterar integrações. Você pode visualizar o status
+                  abaixo.
+                </p>
+              )}
+
+              {/* WhatsApp Business API (Meta Cloud API) */}
+              <div className="rounded-xl border border-border p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <MessageCircle className="size-4.5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">
+                        WhatsApp Business API
+                      </h2>
+                      <p className="text-xs text-muted-foreground">Meta Cloud API</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      className={cn(
+                        "border capitalize",
+                        metaVerificationStyle[tenantMetaStatus] ?? metaVerificationStyle["pending"],
+                      )}
+                    >
+                      {metaVerificationLabel[tenantMetaStatus] ?? tenantMetaStatus}
+                    </Badge>
+                    {integrations?.whatsapp.isConfigured ? (
+                      <Badge className="border border-success/30 bg-success/15 text-success">
+                        <CheckCircle2 className="size-3" /> Configurado
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        Não configurado
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="wa-phone-number" className="mb-1.5 block text-xs">
+                      Número (com DDI)
+                    </Label>
+                    <Input
+                      id="wa-phone-number"
+                      placeholder="+55 11 90000-0000"
+                      value={whatsappForm.phoneNumber}
+                      disabled={!session.staff.isAdmin}
+                      onChange={(e) =>
+                        setWhatsappForm((prev) => ({ ...prev, phoneNumber: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="wa-phone-number-id" className="mb-1.5 block text-xs">
+                      Phone Number ID
+                    </Label>
+                    <Input
+                      id="wa-phone-number-id"
+                      value={whatsappForm.phoneNumberId}
+                      disabled={!session.staff.isAdmin}
+                      onChange={(e) =>
+                        setWhatsappForm((prev) => ({ ...prev, phoneNumberId: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="wa-waba-id" className="mb-1.5 block text-xs">
+                      WABA ID
+                    </Label>
+                    <Input
+                      id="wa-waba-id"
+                      value={whatsappForm.wabaId}
+                      disabled={!session.staff.isAdmin}
+                      onChange={(e) =>
+                        setWhatsappForm((prev) => ({ ...prev, wabaId: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="wa-token" className="mb-1.5 block text-xs">
+                      Token de acesso
+                    </Label>
+                    <Input
+                      id="wa-token"
+                      type="password"
+                      placeholder={
+                        integrations?.whatsapp.isConfigured
+                          ? "•••••••• (salvo)"
+                          : "Cole o token aqui"
+                      }
+                      value={whatsappForm.accessToken}
+                      disabled={!session.staff.isAdmin}
+                      onChange={(e) =>
+                        setWhatsappForm((prev) => ({ ...prev, accessToken: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                {whatsappTestResult && (
+                  <p
+                    className={cn(
+                      "mt-3 flex items-start gap-1.5 text-xs",
+                      whatsappTestResult.ok ? "text-success" : "text-destructive",
+                    )}
+                  >
+                    {whatsappTestResult.ok ? (
+                      <CheckCircle2 className="size-3.5 shrink-0 translate-y-px" />
+                    ) : (
+                      <XCircle className="size-3.5 shrink-0 translate-y-px" />
+                    )}
+                    {whatsappTestResult.ok ? whatsappTestResult.detail : whatsappTestResult.error}
+                  </p>
+                )}
+
+                {session.staff.isAdmin && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      disabled={
+                        savingWhatsapp ||
+                        !whatsappForm.phoneNumberId ||
+                        !whatsappForm.wabaId ||
+                        !whatsappForm.phoneNumber ||
+                        !whatsappForm.accessToken
+                      }
+                      onClick={handleSaveWhatsapp}
+                    >
+                      {savingWhatsapp && <Loader2 className="size-3.5 animate-spin" />} Salvar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!integrations?.whatsapp.isConfigured || testingWhatsapp}
+                      onClick={handleTestWhatsapp}
+                    >
+                      {testingWhatsapp && <Loader2 className="size-3.5 animate-spin" />} Testar
+                      conexão
+                    </Button>
+                    {integrations?.whatsapp.isConfigured && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        disabled={savingWhatsapp}
+                        onClick={handleRemoveWhatsapp}
+                      >
+                        <Trash2 className="size-3.5" /> Desativar
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Anthropic */}
+              <div className="rounded-xl border border-border p-4">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <KeyRound className="size-4.5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Anthropic</h2>
+                      <p className="text-xs text-muted-foreground">
+                        Motor de IA do atendimento (RF03) e do copiloto interno (RF11)
+                      </p>
+                    </div>
+                  </div>
+                  {integrations?.anthropic.isConfigured ? (
+                    <Badge className="border border-success/30 bg-success/15 text-success">
+                      <CheckCircle2 className="size-3" /> Configurado
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      Não configurado
+                    </Badge>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="anthropic-key" className="mb-1.5 block text-xs">
+                    Chave de API
+                  </Label>
+                  <Input
+                    id="anthropic-key"
+                    type="password"
+                    placeholder={
+                      integrations?.anthropic.isConfigured ? "•••••••• (salva)" : "sk-ant-..."
+                    }
+                    value={anthropicApiKey}
+                    disabled={!session.staff.isAdmin}
+                    onChange={(e) => setAnthropicApiKey(e.target.value)}
+                    className="max-w-md"
+                  />
+                </div>
+
+                {anthropicTestResult && (
+                  <p
+                    className={cn(
+                      "mt-3 flex items-start gap-1.5 text-xs",
+                      anthropicTestResult.ok ? "text-success" : "text-destructive",
+                    )}
+                  >
+                    {anthropicTestResult.ok ? (
+                      <CheckCircle2 className="size-3.5 shrink-0 translate-y-px" />
+                    ) : (
+                      <XCircle className="size-3.5 shrink-0 translate-y-px" />
+                    )}
+                    {anthropicTestResult.ok
+                      ? anthropicTestResult.detail
+                      : anthropicTestResult.error}
+                  </p>
+                )}
+
+                {session.staff.isAdmin && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      disabled={savingAnthropic || !anthropicApiKey}
+                      onClick={handleSaveAnthropic}
+                    >
+                      {savingAnthropic && <Loader2 className="size-3.5 animate-spin" />} Salvar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!integrations?.anthropic.isConfigured || testingAnthropic}
+                      onClick={handleTestAnthropic}
+                    >
+                      {testingAnthropic && <Loader2 className="size-3.5 animate-spin" />} Testar
+                      conexão
+                    </Button>
+                    {integrations?.anthropic.isConfigured && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        disabled={savingAnthropic}
+                        onClick={handleRemoveAnthropic}
+                      >
+                        <Trash2 className="size-3.5" /> Desativar
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Resend — fora do MVP (RF12), campos presentes mas desligados */}
+              <div className="rounded-xl border border-dashed border-border p-4 opacity-60">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                      <Mail className="size-4.5" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-foreground">Resend</h2>
+                      <p className="text-xs text-muted-foreground">Canal de e-mail (RF12)</p>
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="text-muted-foreground">
+                    Disponível na Fase 4 (RF12)
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label className="mb-1.5 block text-xs">Domínio remetente</Label>
+                    <Input disabled placeholder="contato@seudominio.com.br" />
+                  </div>
+                  <div>
+                    <Label className="mb-1.5 block text-xs">Chave de API</Label>
+                    <Input disabled type="password" placeholder="re_..." />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
