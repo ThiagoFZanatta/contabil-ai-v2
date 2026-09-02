@@ -1157,6 +1157,7 @@ export type Database = {
       };
       tenant_integrations: {
         Row: {
+          ai_selected_model: string;
           is_configured: boolean;
           metadata: Json;
           provider: string;
@@ -1165,6 +1166,7 @@ export type Database = {
           updated_by: string | null;
         };
         Insert: {
+          ai_selected_model?: string;
           is_configured?: boolean;
           metadata?: Json;
           provider: string;
@@ -1173,6 +1175,7 @@ export type Database = {
           updated_by?: string | null;
         };
         Update: {
+          ai_selected_model?: string;
           is_configured?: boolean;
           metadata?: Json;
           provider?: string;

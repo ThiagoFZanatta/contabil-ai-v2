@@ -30,11 +30,16 @@ import { useCurrentStaff } from "@/hooks/use-current-staff";
 import { supabase } from "@/integrations/supabase/client";
 import {
   removeIntegrationCredential,
-  saveAnthropicCredential,
+  saveAiSelectedModel,
+  saveOpenAiCredential,
   saveWhatsAppCredential,
-  testAnthropicConnection,
+  testOpenAiConnection,
   testWhatsAppConnection,
 } from "@/lib/integration-actions";
+import {
+  OPENAI_CURATED_MODELS,
+  type OpenAiCuratedModel,
+} from "@/lib/integrations/ai/openai-provider";
 import {
   Select,
   SelectContent,
@@ -171,7 +176,7 @@ function ConfiguracoesPage() {
   const [tenantWhatsappNumber, setTenantWhatsappNumber] = useState<string | null>(null);
   const [tenantMetaStatus, setTenantMetaStatus] = useState<string>("pending");
   const [integrations, setIntegrations] = useState<Record<
-    "whatsapp" | "anthropic",
+    "whatsapp" | "openai",
     IntegrationStatus
   > | null>(null);
 
@@ -182,14 +187,16 @@ function ConfiguracoesPage() {
     accessToken: "",
     appSecret: "",
   });
-  const [anthropicApiKey, setAnthropicApiKey] = useState("");
+  const [openAiApiKey, setOpenAiApiKey] = useState("");
+  const [aiSelectedModel, setAiSelectedModel] = useState<OpenAiCuratedModel>("gpt-5-mini");
 
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
-  const [savingAnthropic, setSavingAnthropic] = useState(false);
+  const [savingOpenAi, setSavingOpenAi] = useState(false);
+  const [savingAiModel, setSavingAiModel] = useState(false);
   const [testingWhatsapp, setTestingWhatsapp] = useState(false);
-  const [testingAnthropic, setTestingAnthropic] = useState(false);
+  const [testingOpenAi, setTestingOpenAi] = useState(false);
   const [whatsappTestResult, setWhatsappTestResult] = useState<ConnectionTestResult | null>(null);
-  const [anthropicTestResult, setAnthropicTestResult] = useState<ConnectionTestResult | null>(null);
+  const [openAiTestResult, setOpenAiTestResult] = useState<ConnectionTestResult | null>(null);
 
   const [agentName, setAgentName] = useState("Nara");
   const [agentTone, setAgentTone] = useState("");
@@ -238,7 +245,7 @@ function ConfiguracoesPage() {
         .single(),
       supabase
         .from("tenant_integrations")
-        .select("provider, is_configured, metadata")
+        .select("provider, is_configured, metadata, ai_selected_model")
         .eq("tenant_id", id),
     ]);
 
@@ -247,16 +254,19 @@ function ConfiguracoesPage() {
       setTenantMetaStatus(tenantRow.meta_verification_status);
     }
 
-    const next: Record<"whatsapp" | "anthropic", IntegrationStatus> = {
+    const next: Record<"whatsapp" | "openai", IntegrationStatus> = {
       whatsapp: { isConfigured: false, metadata: {} },
-      anthropic: { isConfigured: false, metadata: {} },
+      openai: { isConfigured: false, metadata: {} },
     };
     for (const row of integrationRows ?? []) {
-      if (row.provider === "whatsapp" || row.provider === "anthropic") {
+      if (row.provider === "whatsapp" || row.provider === "openai") {
         next[row.provider] = {
           isConfigured: row.is_configured,
           metadata: (row.metadata ?? {}) as Record<string, unknown>,
         };
+      }
+      if (row.provider === "openai") {
+        setAiSelectedModel(row.ai_selected_model as OpenAiCuratedModel);
       }
     }
     setIntegrations(next);
@@ -318,48 +328,62 @@ function ConfiguracoesPage() {
     }
   }
 
-  async function handleSaveAnthropic() {
-    setSavingAnthropic(true);
-    setAnthropicTestResult(null);
+  async function handleSaveOpenAi() {
+    setSavingOpenAi(true);
+    setOpenAiTestResult(null);
     try {
-      await saveAnthropicCredential({ data: { apiKey: anthropicApiKey } });
-      toast.success("Integração com a Anthropic salva.");
-      setAnthropicApiKey("");
+      await saveOpenAiCredential({ data: { apiKey: openAiApiKey } });
+      toast.success("Integração com a OpenAI salva.");
+      setOpenAiApiKey("");
       if (tenantId) await loadIntegrations(tenantId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível salvar a integração.");
     } finally {
-      setSavingAnthropic(false);
+      setSavingOpenAi(false);
     }
   }
 
-  async function handleRemoveAnthropic() {
-    setSavingAnthropic(true);
+  async function handleRemoveOpenAi() {
+    setSavingOpenAi(true);
     try {
-      await removeIntegrationCredential({ data: { provider: "anthropic" } });
-      toast.success("Integração com a Anthropic desativada.");
-      setAnthropicTestResult(null);
+      await removeIntegrationCredential({ data: { provider: "openai" } });
+      toast.success("Integração com a OpenAI desativada.");
+      setOpenAiTestResult(null);
       if (tenantId) await loadIntegrations(tenantId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível desativar a integração.");
     } finally {
-      setSavingAnthropic(false);
+      setSavingOpenAi(false);
     }
   }
 
-  async function handleTestAnthropic() {
-    setTestingAnthropic(true);
-    setAnthropicTestResult(null);
+  async function handleTestOpenAi() {
+    setTestingOpenAi(true);
+    setOpenAiTestResult(null);
     try {
-      const result = await testAnthropicConnection();
-      setAnthropicTestResult(result);
+      const result = await testOpenAiConnection();
+      setOpenAiTestResult(result);
     } catch (err) {
-      setAnthropicTestResult({
+      setOpenAiTestResult({
         ok: false,
         error: err instanceof Error ? err.message : "Falha ao testar a conexão.",
       });
     } finally {
-      setTestingAnthropic(false);
+      setTestingOpenAi(false);
+    }
+  }
+
+  async function handleSaveAiModel(model: OpenAiCuratedModel) {
+    setAiSelectedModel(model);
+    setSavingAiModel(true);
+    try {
+      await saveAiSelectedModel({ data: { model } });
+      toast.success("Modelo de IA atualizado.");
+      if (tenantId) await loadIntegrations(tenantId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível salvar o modelo.");
+    } finally {
+      setSavingAiModel(false);
     }
   }
 
@@ -950,7 +974,7 @@ function ConfiguracoesPage() {
                 )}
               </div>
 
-              {/* Anthropic */}
+              {/* OpenAI (v1.5 — substitui a Anthropic, PRD seção 10.1) */}
               <div className="rounded-xl border border-border p-4">
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -958,13 +982,13 @@ function ConfiguracoesPage() {
                       <KeyRound className="size-4.5" />
                     </div>
                     <div>
-                      <h2 className="text-sm font-semibold text-foreground">Anthropic</h2>
+                      <h2 className="text-sm font-semibold text-foreground">OpenAI</h2>
                       <p className="text-xs text-muted-foreground">
                         Motor de IA do atendimento (RF03) e do copiloto interno (RF11)
                       </p>
                     </div>
                   </div>
-                  {integrations?.anthropic.isConfigured ? (
+                  {integrations?.openai.isConfigured ? (
                     <Badge className="border border-success/30 bg-success/15 text-success">
                       <CheckCircle2 className="size-3" /> Configurado
                     </Badge>
@@ -976,37 +1000,59 @@ function ConfiguracoesPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="anthropic-key" className="mb-1.5 block text-xs">
+                  <Label htmlFor="openai-key" className="mb-1.5 block text-xs">
                     Chave de API
                   </Label>
                   <Input
-                    id="anthropic-key"
+                    id="openai-key"
                     type="password"
-                    placeholder={
-                      integrations?.anthropic.isConfigured ? "•••••••• (salva)" : "sk-ant-..."
-                    }
-                    value={anthropicApiKey}
+                    placeholder={integrations?.openai.isConfigured ? "•••••••• (salva)" : "sk-..."}
+                    value={openAiApiKey}
                     disabled={!session.staff.isAdmin}
-                    onChange={(e) => setAnthropicApiKey(e.target.value)}
+                    onChange={(e) => setOpenAiApiKey(e.target.value)}
                     className="max-w-md"
                   />
                 </div>
 
-                {anthropicTestResult && (
+                <div className="mt-4">
+                  <Label htmlFor="openai-model" className="mb-1.5 block text-xs">
+                    Modelo
+                  </Label>
+                  <Select
+                    value={aiSelectedModel}
+                    disabled={!session.staff.isAdmin || savingAiModel}
+                    onValueChange={(v) => handleSaveAiModel(v as OpenAiCuratedModel)}
+                  >
+                    <SelectTrigger id="openai-model" className="max-w-md">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OPENAI_CURATED_MODELS.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                          {model === "gpt-5-mini" ? " (padrão recomendado)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    Lista curada — não é possível usar outros modelos da OpenAI fora desta lista.
+                  </p>
+                </div>
+
+                {openAiTestResult && (
                   <p
                     className={cn(
                       "mt-3 flex items-start gap-1.5 text-xs",
-                      anthropicTestResult.ok ? "text-success" : "text-destructive",
+                      openAiTestResult.ok ? "text-success" : "text-destructive",
                     )}
                   >
-                    {anthropicTestResult.ok ? (
+                    {openAiTestResult.ok ? (
                       <CheckCircle2 className="size-3.5 shrink-0 translate-y-px" />
                     ) : (
                       <XCircle className="size-3.5 shrink-0 translate-y-px" />
                     )}
-                    {anthropicTestResult.ok
-                      ? anthropicTestResult.detail
-                      : anthropicTestResult.error}
+                    {openAiTestResult.ok ? openAiTestResult.detail : openAiTestResult.error}
                   </p>
                 )}
 
@@ -1014,27 +1060,27 @@ function ConfiguracoesPage() {
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <Button
                       size="sm"
-                      disabled={savingAnthropic || !anthropicApiKey}
-                      onClick={handleSaveAnthropic}
+                      disabled={savingOpenAi || !openAiApiKey}
+                      onClick={handleSaveOpenAi}
                     >
-                      {savingAnthropic && <Loader2 className="size-3.5 animate-spin" />} Salvar
+                      {savingOpenAi && <Loader2 className="size-3.5 animate-spin" />} Salvar
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={!integrations?.anthropic.isConfigured || testingAnthropic}
-                      onClick={handleTestAnthropic}
+                      disabled={!integrations?.openai.isConfigured || testingOpenAi}
+                      onClick={handleTestOpenAi}
                     >
-                      {testingAnthropic && <Loader2 className="size-3.5 animate-spin" />} Testar
+                      {testingOpenAi && <Loader2 className="size-3.5 animate-spin" />} Testar
                       conexão
                     </Button>
-                    {integrations?.anthropic.isConfigured && (
+                    {integrations?.openai.isConfigured && (
                       <Button
                         size="sm"
                         variant="ghost"
                         className="text-muted-foreground hover:text-destructive"
-                        disabled={savingAnthropic}
-                        onClick={handleRemoveAnthropic}
+                        disabled={savingOpenAi}
+                        onClick={handleRemoveOpenAi}
                       >
                         <Trash2 className="size-3.5" /> Desativar
                       </Button>

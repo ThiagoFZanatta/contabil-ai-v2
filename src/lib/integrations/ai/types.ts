@@ -1,6 +1,7 @@
 // Interface plugável do motor de IA conversacional (PRD 10.1, 10.4) — hoje
-// só a Anthropic é implementada, mas o motor de atendimento (RF03) e o
-// copiloto interno (RF11) devem depender só deste contrato.
+// só a OpenAI é implementada (v1.5, troca do provedor anterior), mas o
+// motor de atendimento (RF03) e o copiloto interno (RF11) devem depender
+// só deste contrato.
 
 export interface AiMessage {
   role: "user" | "assistant";
