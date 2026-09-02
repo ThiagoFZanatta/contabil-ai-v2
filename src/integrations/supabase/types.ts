@@ -8,6 +8,109 @@ export type Database = {
   };
   public: {
     Tables: {
+      agent_conversation_state: {
+        Row: {
+          active_client_id: string | null;
+          active_intent: string | null;
+          context: Json;
+          conversation_id: string;
+          is_escalated: boolean;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          active_client_id?: string | null;
+          active_intent?: string | null;
+          context?: Json;
+          conversation_id: string;
+          is_escalated?: boolean;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          active_client_id?: string | null;
+          active_intent?: string | null;
+          context?: Json;
+          conversation_id?: string;
+          is_escalated?: boolean;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "agent_conversation_state_active_client_id_fkey";
+            columns: ["active_client_id"];
+            isOneToOne: false;
+            referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "agent_conversation_state_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: true;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "agent_conversation_state_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      agent_tool_calls: {
+        Row: {
+          conversation_id: string;
+          created_at: string;
+          error_message: string | null;
+          id: string;
+          input: Json;
+          output: Json | null;
+          status: string;
+          tenant_id: string;
+          tool_name: string;
+        };
+        Insert: {
+          conversation_id: string;
+          created_at?: string;
+          error_message?: string | null;
+          id?: string;
+          input?: Json;
+          output?: Json | null;
+          status?: string;
+          tenant_id: string;
+          tool_name: string;
+        };
+        Update: {
+          conversation_id?: string;
+          created_at?: string;
+          error_message?: string | null;
+          id?: string;
+          input?: Json;
+          output?: Json | null;
+          status?: string;
+          tenant_id?: string;
+          tool_name?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "agent_tool_calls_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "agent_tool_calls_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ai_agent_config: {
         Row: {
           agent_name: string;
@@ -275,6 +378,65 @@ export type Database = {
           },
         ];
       };
+      consent_log: {
+        Row: {
+          accepted_at: string;
+          channel: string;
+          contact_id: string | null;
+          id: string;
+          lead_id: string | null;
+          policy_version_id: string;
+          tenant_id: string;
+        };
+        Insert: {
+          accepted_at?: string;
+          channel?: string;
+          contact_id?: string | null;
+          id?: string;
+          lead_id?: string | null;
+          policy_version_id: string;
+          tenant_id: string;
+        };
+        Update: {
+          accepted_at?: string;
+          channel?: string;
+          contact_id?: string | null;
+          id?: string;
+          lead_id?: string | null;
+          policy_version_id?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "consent_log_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "consent_log_lead_id_fkey";
+            columns: ["lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "consent_log_policy_version_id_fkey";
+            columns: ["policy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "consent_policy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "consent_log_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       consent_policy_versions: {
         Row: {
           id: string;
@@ -345,6 +507,81 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "contacts_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      conversations: {
+        Row: {
+          assigned_to: string | null;
+          contact_id: string | null;
+          created_at: string;
+          department_id: string | null;
+          id: string;
+          last_message_at: string;
+          lead_id: string | null;
+          status: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          assigned_to?: string | null;
+          contact_id?: string | null;
+          created_at?: string;
+          department_id?: string | null;
+          id?: string;
+          last_message_at?: string;
+          lead_id?: string | null;
+          status?: string;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          assigned_to?: string | null;
+          contact_id?: string | null;
+          created_at?: string;
+          department_id?: string | null;
+          id?: string;
+          last_message_at?: string;
+          lead_id?: string | null;
+          status?: string;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversations_assigned_to_fkey";
+            columns: ["assigned_to"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversations_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversations_department_id_fkey";
+            columns: ["department_id"];
+            isOneToOne: false;
+            referencedRelation: "departments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversations_lead_id_fkey";
+            columns: ["lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversations_tenant_id_fkey";
             columns: ["tenant_id"];
             isOneToOne: false;
             referencedRelation: "tenants";
@@ -448,6 +685,71 @@ export type Database = {
           },
           {
             foreignKeyName: "document_submissions_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      escalations: {
+        Row: {
+          claimed_at: string | null;
+          claimed_by: string | null;
+          conversation_id: string;
+          department_id: string;
+          escalated_at: string;
+          id: string;
+          is_overflow: boolean;
+          resolved_at: string | null;
+          tenant_id: string;
+        };
+        Insert: {
+          claimed_at?: string | null;
+          claimed_by?: string | null;
+          conversation_id: string;
+          department_id: string;
+          escalated_at?: string;
+          id?: string;
+          is_overflow?: boolean;
+          resolved_at?: string | null;
+          tenant_id: string;
+        };
+        Update: {
+          claimed_at?: string | null;
+          claimed_by?: string | null;
+          conversation_id?: string;
+          department_id?: string;
+          escalated_at?: string;
+          id?: string;
+          is_overflow?: boolean;
+          resolved_at?: string | null;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "escalations_claimed_by_fkey";
+            columns: ["claimed_by"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "escalations_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "escalations_department_id_fkey";
+            columns: ["department_id"];
+            isOneToOne: false;
+            referencedRelation: "departments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "escalations_tenant_id_fkey";
             columns: ["tenant_id"];
             isOneToOne: false;
             referencedRelation: "tenants";
@@ -592,6 +894,61 @@ export type Database = {
           },
         ];
       };
+      messages: {
+        Row: {
+          body: string;
+          conversation_id: string;
+          created_at: string;
+          id: string;
+          provider_message_id: string | null;
+          sender: string;
+          sender_staff_id: string | null;
+          tenant_id: string;
+        };
+        Insert: {
+          body: string;
+          conversation_id: string;
+          created_at?: string;
+          id?: string;
+          provider_message_id?: string | null;
+          sender: string;
+          sender_staff_id?: string | null;
+          tenant_id: string;
+        };
+        Update: {
+          body?: string;
+          conversation_id?: string;
+          created_at?: string;
+          id?: string;
+          provider_message_id?: string | null;
+          sender?: string;
+          sender_staff_id?: string | null;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "messages_sender_staff_id_fkey";
+            columns: ["sender_staff_id"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "messages_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       staff: {
         Row: {
           created_at: string;
@@ -629,6 +986,64 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "staff_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      staff_copilot_interactions: {
+        Row: {
+          action_type: string;
+          conversation_id: string | null;
+          created_at: string;
+          final_text: string | null;
+          id: string;
+          outcome: string;
+          staff_id: string;
+          suggestion: string;
+          tenant_id: string;
+        };
+        Insert: {
+          action_type: string;
+          conversation_id?: string | null;
+          created_at?: string;
+          final_text?: string | null;
+          id?: string;
+          outcome?: string;
+          staff_id: string;
+          suggestion: string;
+          tenant_id: string;
+        };
+        Update: {
+          action_type?: string;
+          conversation_id?: string | null;
+          created_at?: string;
+          final_text?: string | null;
+          id?: string;
+          outcome?: string;
+          staff_id?: string;
+          suggestion?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "staff_copilot_interactions_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "staff_copilot_interactions_staff_id_fkey";
+            columns: ["staff_id"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "staff_copilot_interactions_tenant_id_fkey";
             columns: ["tenant_id"];
             isOneToOne: false;
             referencedRelation: "tenants";
