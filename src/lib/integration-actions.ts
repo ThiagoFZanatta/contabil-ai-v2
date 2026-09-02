@@ -36,6 +36,7 @@ const saveWhatsAppInput = z.object({
   wabaId: z.string().trim().min(1, "Informe o WABA ID."),
   phoneNumber: z.string().trim().min(1, "Informe o número do WhatsApp."),
   accessToken: z.string().trim().min(1, "Informe o token de acesso."),
+  appSecret: z.string().trim().min(1, "Informe o App Secret."),
 });
 
 export const saveWhatsAppCredential = createServerFn({ method: "POST" })
@@ -57,6 +58,21 @@ export const saveWhatsAppCredential = createServerFn({ method: "POST" })
     );
     if (secretError) {
       throw new Error(`Não foi possível salvar o token: ${secretError.message}`);
+    }
+
+    // App Secret é usado só para validar a assinatura de cada entrega do
+    // webhook (X-Hub-Signature-256) — não é o token de envio, por isso vive
+    // como uma segunda linha de segredo, sob uma chave própria.
+    const { error: appSecretError } = await supabaseAdmin.from("tenant_integration_secrets").upsert(
+      {
+        tenant_id: caller.tenant_id,
+        provider: "whatsapp_app_secret",
+        secret_value: data.appSecret,
+      },
+      { onConflict: "tenant_id,provider" },
+    );
+    if (appSecretError) {
+      throw new Error(`Não foi possível salvar o App Secret: ${appSecretError.message}`);
     }
 
     const { error: integrationError } = await supabaseAdmin.from("tenant_integrations").upsert(
@@ -164,6 +180,17 @@ export const removeIntegrationCredential = createServerFn({ method: "POST" })
       .eq("provider", data.provider);
     if (secretError) {
       throw new Error(`Não foi possível remover a credencial: ${secretError.message}`);
+    }
+
+    if (data.provider === "whatsapp") {
+      const { error: appSecretError } = await supabaseAdmin
+        .from("tenant_integration_secrets")
+        .delete()
+        .eq("tenant_id", caller.tenant_id)
+        .eq("provider", "whatsapp_app_secret");
+      if (appSecretError) {
+        throw new Error(`Não foi possível remover o App Secret: ${appSecretError.message}`);
+      }
     }
 
     return { ok: true as const };

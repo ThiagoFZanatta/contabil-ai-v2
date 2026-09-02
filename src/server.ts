@@ -46,6 +46,23 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    // Endpoint público chamado diretamente pela Meta (webhook do WhatsApp
+    // Business API) — não passa pelo router do TanStack Start, que nesta
+    // versão não expõe rotas HTTP cruas fora de server functions RPC.
+    // Interceptado aqui, no verdadeiro ponto de entrada do fetch, antes de
+    // qualquer coisa relacionada a SSR.
+    const url = new URL(request.url);
+    if (url.pathname === "/api/webhooks/whatsapp") {
+      try {
+        const { handleMetaCloudWebhook } =
+          await import("./lib/integrations/whatsapp/meta-cloud-webhook.server");
+        return await handleMetaCloudWebhook(request);
+      } catch (error) {
+        console.error(error);
+        return new Response("Internal Server Error", { status: 500 });
+      }
+    }
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

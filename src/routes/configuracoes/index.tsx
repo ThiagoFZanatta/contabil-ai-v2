@@ -180,6 +180,7 @@ function ConfiguracoesPage() {
     wabaId: "",
     phoneNumber: "",
     accessToken: "",
+    appSecret: "",
   });
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
 
@@ -278,7 +279,7 @@ function ConfiguracoesPage() {
     try {
       await saveWhatsAppCredential({ data: whatsappForm });
       toast.success("Integração com o WhatsApp salva.");
-      setWhatsappForm((prev) => ({ ...prev, accessToken: "" }));
+      setWhatsappForm((prev) => ({ ...prev, accessToken: "", appSecret: "" }));
       if (tenantId) await loadIntegrations(tenantId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível salvar a integração.");
@@ -856,6 +857,41 @@ function ConfiguracoesPage() {
                       }
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="wa-app-secret" className="mb-1.5 block text-xs">
+                      App Secret
+                    </Label>
+                    <Input
+                      id="wa-app-secret"
+                      type="password"
+                      placeholder={
+                        integrations?.whatsapp.isConfigured
+                          ? "•••••••• (salvo)"
+                          : "Da aba Configurações Básicas do seu app Meta"
+                      }
+                      value={whatsappForm.appSecret}
+                      disabled={!session.staff.isAdmin}
+                      onChange={(e) =>
+                        setWhatsappForm((prev) => ({ ...prev, appSecret: e.target.value }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">Webhook</p>
+                  <p className="mt-1">
+                    No painel do seu app Meta (WhatsApp → Configuração), cadastre esta URL de
+                    callback:
+                  </p>
+                  <code className="mt-1 block break-all rounded bg-background px-2 py-1 text-foreground">
+                    {typeof window !== "undefined" ? window.location.origin : ""}
+                    /api/webhooks/whatsapp
+                  </code>
+                  <p className="mt-1">
+                    O token de verificação foi combinado por fora do painel (não é exibido aqui por
+                    segurança). O App Secret acima é o que autentica cada mensagem recebida.
+                  </p>
                 </div>
 
                 {whatsappTestResult && (
@@ -883,7 +919,8 @@ function ConfiguracoesPage() {
                         !whatsappForm.phoneNumberId ||
                         !whatsappForm.wabaId ||
                         !whatsappForm.phoneNumber ||
-                        !whatsappForm.accessToken
+                        !whatsappForm.accessToken ||
+                        !whatsappForm.appSecret
                       }
                       onClick={handleSaveWhatsapp}
                     >
