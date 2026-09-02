@@ -5,7 +5,7 @@ import { resolveAiProvider, resolveWhatsAppProvider } from "@/lib/integrations/r
 import type { WhatsAppProvider } from "@/lib/integrations/whatsapp/types";
 import { AGENT_TOOL_DEFINITIONS, escalateToDepartment, executeAgentTool } from "./tools.server";
 import { buildSystemPrompt } from "./system-prompt.server";
-import type { ToolContext } from "./types";
+import { toBusinessHoursWallClock, type ToolContext } from "./types";
 
 // Motor de atendimento (RF03/10.2): a partir de uma mensagem já ingerida
 // pelo webhook (meta-cloud-webhook.server.ts), decide o que fazer —
@@ -109,13 +109,29 @@ async function handleConsentGate(
     .maybeSingle();
   const context = (state?.context ?? {}) as Record<string, unknown>;
 
-  const { data: latestPolicy } = await supabaseAdmin
+  const { data: latestPolicyRow } = await supabaseAdmin
     .from("consent_policy_versions")
     .select("id, text")
     .eq("tenant_id", ctx.tenantId)
     .order("version_number", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  // consent_log.policy_version_id é NOT NULL — sem nenhuma versão publicada
+  // pelo tenant (Tela 8 → Consentimento), o aceite nunca poderia ser
+  // gravado, e o gate voltaria a disparar a cada mensagem par (o contexto é
+  // limpo mesmo sem log, então a próxima mensagem cai de novo no "else"
+  // abaixo). Semeia o rascunho padrão da seção 8.1 para o aceite ter onde
+  // ser registrado; o tenant pode revisar/publicar a versão dele depois.
+  const latestPolicy =
+    latestPolicyRow ??
+    (
+      await supabaseAdmin
+        .from("consent_policy_versions")
+        .insert({ tenant_id: ctx.tenantId, text: DEFAULT_CONSENT_TEXT })
+        .select("id, text")
+        .single()
+    ).data;
 
   if (context["awaiting_consent"]) {
     if (latestPolicy) {
@@ -265,16 +281,18 @@ async function runToolLoop(
 }
 
 async function isWithinBusinessHours(tenantId: string): Promise<boolean> {
-  const now = new Date();
+  // business_hours guarda horário local (ver types.ts) — compara contra o
+  // relógio local, não contra o UTC cru.
+  const localNow = toBusinessHoursWallClock(new Date());
   const { data } = await supabaseAdmin
     .from("business_hours")
     .select("start_time, end_time")
     .eq("tenant_id", tenantId)
-    .eq("day_of_week", now.getUTCDay())
+    .eq("day_of_week", localNow.getUTCDay())
     .maybeSingle();
   if (!data) return false;
 
-  const hhmmss = now.toISOString().slice(11, 19);
+  const hhmmss = localNow.toISOString().slice(11, 19);
   return hhmmss >= data.start_time && hhmmss <= data.end_time;
 }
 

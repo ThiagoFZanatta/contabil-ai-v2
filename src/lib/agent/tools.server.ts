@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Database, Json } from "@/integrations/supabase/types";
 import type { AiToolDefinition } from "@/lib/integrations/ai/types";
-import { DEPARTMENT_SLUGS, type ToolContext } from "./types";
+import { DEPARTMENT_SLUGS, fromBusinessHoursWallClock, type ToolContext } from "./types";
 
 // As 9 ferramentas do motor conversacional (PRD seção 10.2, RF03/04/05/06/
 // 08/09). Cada uma fala só com o Supabase (via service role, chamada só a
@@ -235,8 +235,6 @@ interface BusyRange {
   end: number;
 }
 
-// Simplificação de fuso: horários comparados em UTC (mesma nota da
-// migration de business_hours).
 async function checkAvailability(ctx: ToolContext, input: unknown): Promise<unknown> {
   const record = asRecord(input);
   const departmentSlug = asString(record["departmentSlug"]);
@@ -269,8 +267,15 @@ async function checkAvailability(ctx: ToolContext, input: unknown): Promise<unkn
     .maybeSingle();
   if (!hours) return { slots: [], note: "Fora do horário comercial configurado para este dia." };
 
-  const dayStart = new Date(`${preferredDate}T${hours.start_time}Z`).getTime();
-  const dayEnd = new Date(`${preferredDate}T${hours.end_time}Z`).getTime();
+  // hours.start_time/end_time são horário local (ver nota em types.ts) —
+  // fromBusinessHoursWallClock converte para o instante UTC real antes de
+  // comparar contra appointments/staff_time_blocks (que são UTC de verdade).
+  const dayStart = fromBusinessHoursWallClock(
+    new Date(`${preferredDate}T${hours.start_time}Z`),
+  ).getTime();
+  const dayEnd = fromBusinessHoursWallClock(
+    new Date(`${preferredDate}T${hours.end_time}Z`),
+  ).getTime();
   if (!Number.isFinite(dayStart) || !Number.isFinite(dayEnd) || dayStart >= dayEnd) {
     return { slots: [], note: "Data inválida." };
   }

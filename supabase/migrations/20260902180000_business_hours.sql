@@ -3,10 +3,14 @@
 -- humana só vem no próximo horário útil. Cada tenant nasce com um padrão
 -- razoável (seg-sex, 8h-18h) igual ao sugerido no RF10, editável depois.
 --
--- Nota de simplificação: os horários são guardados e comparados em UTC —
--- não existe ainda uma coluna de fuso horário por tenant. Como o MVP é de
--- um único escritório no Brasil, isso é uma simplificação aceita por ora;
--- vira um problema real só na fase de revenda multi-fuso (seção 11).
+-- Nota de simplificação: start_time/end_time guardam horário LOCAL (ex:
+-- "08:00" é 8h da manhã no Brasil, não 8h UTC) — não existe ainda uma
+-- coluna de fuso horário por tenant, então o código (orchestrator.server.ts
+-- / tools.server.ts, via BUSINESS_HOURS_UTC_OFFSET_MS em types.ts) assume
+-- fuso fixo America/Sao_Paulo (UTC-3, sem horário de verão desde 2019) ao
+-- comparar contra o relógio real. Como o MVP é de um único escritório no
+-- Brasil, isso é uma simplificação aceita por ora; vira um problema real só
+-- na fase de revenda multi-fuso (seção 11).
 create table public.business_hours (
   tenant_id uuid not null references public.tenants (id) on delete cascade,
   day_of_week smallint not null check (day_of_week between 0 and 6),
