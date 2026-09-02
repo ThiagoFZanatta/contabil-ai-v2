@@ -227,6 +227,35 @@ export type Database = {
           },
         ];
       };
+      business_hours: {
+        Row: {
+          day_of_week: number;
+          end_time: string;
+          start_time: string;
+          tenant_id: string;
+        };
+        Insert: {
+          day_of_week: number;
+          end_time: string;
+          start_time: string;
+          tenant_id: string;
+        };
+        Update: {
+          day_of_week?: number;
+          end_time?: string;
+          start_time?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "business_hours_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       client_contact_links: {
         Row: {
           client_id: string;
