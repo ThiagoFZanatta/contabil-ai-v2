@@ -5,6 +5,7 @@ import {
   BookOpen,
   Bot,
   CheckCircle2,
+  Download,
   FileText,
   KeyRound,
   Loader2,
@@ -60,14 +61,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
 import {
-  consentVersions,
-  faqs as faqsSeed,
-  kbDocuments,
-  messageTemplates,
-  type TemplateStatus,
-} from "@/lib/mock-data";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 type Periodicity = "mensal" | "trimestral" | "anual" | "sob_demanda";
 
@@ -92,10 +95,19 @@ const sections = [
 
 type SectionKey = (typeof sections)[number]["key"];
 
+type TemplateStatus = "aprovado" | "pendente" | "rejeitado";
+type TemplateCategory = "utilidade" | "marketing" | "autenticacao";
+
 const templateStatusStyle: Record<TemplateStatus, string> = {
   aprovado: "bg-success/15 text-success border-success/30",
   pendente: "bg-warning/20 text-warning-foreground border-warning/40",
   rejeitado: "bg-destructive/10 text-destructive border-destructive/30",
+};
+
+const templateCategoryLabel: Record<TemplateCategory, string> = {
+  utilidade: "Utilidade",
+  marketing: "Marketing",
+  autenticacao: "Autenticação",
 };
 
 const metaVerificationLabel: Record<string, string> = {
@@ -118,6 +130,36 @@ interface IntegrationStatus {
 }
 
 type ConnectionTestResult = { ok: true; detail: string } | { ok: false; error: string };
+
+interface FaqRow {
+  id: string;
+  question: string;
+  answer: string;
+}
+
+interface KbDocumentRow {
+  id: string;
+  file_name: string;
+  file_type: string;
+  size_bytes: number;
+  storage_path: string;
+  created_at: string;
+}
+
+interface ConsentVersionRow {
+  id: string;
+  version_number: number;
+  text: string;
+  published_at: string;
+}
+
+interface TemplateRow {
+  id: string;
+  name: string;
+  category: TemplateCategory;
+  status: TemplateStatus;
+  body: string;
+}
 
 function ConfiguracoesPage() {
   const session = useCurrentStaff();
@@ -149,11 +191,24 @@ function ConfiguracoesPage() {
   const [anthropicTestResult, setAnthropicTestResult] = useState<ConnectionTestResult | null>(null);
 
   const [agentName, setAgentName] = useState("Nara");
-  const [agentTone, setAgentTone] = useState(
-    "Amigável, direto e profissional. Evita jargão técnico sem necessidade e sempre confirma antes de agir.",
-  );
-  const [consentText, setConsentText] = useState(consentVersions[0]!.texto);
-  const [faqs, setFaqs] = useState(faqsSeed);
+  const [agentTone, setAgentTone] = useState("");
+  const [savingAgent, setSavingAgent] = useState(false);
+
+  const [faqs, setFaqs] = useState<FaqRow[] | null>(null);
+
+  const [kbDocs, setKbDocs] = useState<KbDocumentRow[] | null>(null);
+  const [uploadingKb, setUploadingKb] = useState(false);
+
+  const [consentVersions, setConsentVersions] = useState<ConsentVersionRow[] | null>(null);
+  const [consentDraft, setConsentDraft] = useState("");
+  const [publishingConsent, setPublishingConsent] = useState(false);
+
+  const [templates, setTemplates] = useState<TemplateRow[] | null>(null);
+  const [newTemplateOpen, setNewTemplateOpen] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [newTemplateCategory, setNewTemplateCategory] = useState<TemplateCategory>("utilidade");
+  const [newTemplateBody, setNewTemplateBody] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -305,6 +360,258 @@ function ConfiguracoesPage() {
     } finally {
       setTestingAnthropic(false);
     }
+  }
+
+  useEffect(() => {
+    if (!tenantId) return;
+    supabase
+      .from("ai_agent_config")
+      .select("agent_name, persona_tone")
+      .eq("tenant_id", tenantId)
+      .maybeSingle()
+      .then(({ data }) => {
+        setAgentName(data?.agent_name ?? "Nara");
+        setAgentTone(data?.persona_tone ?? "");
+      });
+  }, [tenantId]);
+
+  async function handleSaveAgentConfig() {
+    if (!tenantId) return;
+    setSavingAgent(true);
+    try {
+      const { error } = await supabase.from("ai_agent_config").upsert(
+        {
+          tenant_id: tenantId,
+          agent_name: agentName || "Nara",
+          persona_tone: agentTone,
+          updated_by: session.status === "ready" ? session.staff.id : null,
+        },
+        { onConflict: "tenant_id" },
+      );
+      if (error) {
+        toast.error("Não foi possível salvar a configuração do agente.");
+        return;
+      }
+      toast.success("Configuração do agente salva.");
+    } finally {
+      setSavingAgent(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!tenantId) return;
+    supabase
+      .from("knowledge_base_faq")
+      .select("id, question, answer")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setFaqs(data ?? []));
+  }, [tenantId]);
+
+  async function addFaq() {
+    if (!tenantId) return;
+    const { data, error } = await supabase
+      .from("knowledge_base_faq")
+      .insert({ tenant_id: tenantId, question: "Nova pergunta", answer: "Resposta padrão." })
+      .select("id, question, answer")
+      .single();
+    if (error || !data) {
+      toast.error("Não foi possível adicionar a FAQ.");
+      return;
+    }
+    setFaqs((prev) => [data, ...(prev ?? [])]);
+  }
+
+  async function updateFaqQuestion(id: string, question: string) {
+    setFaqs((prev) => (prev ?? []).map((f) => (f.id === id ? { ...f, question } : f)));
+    const { error } = await supabase.from("knowledge_base_faq").update({ question }).eq("id", id);
+    if (error) toast.error("Não foi possível salvar a pergunta.");
+  }
+
+  async function updateFaqAnswer(id: string, answer: string) {
+    setFaqs((prev) => (prev ?? []).map((f) => (f.id === id ? { ...f, answer } : f)));
+    const { error } = await supabase.from("knowledge_base_faq").update({ answer }).eq("id", id);
+    if (error) toast.error("Não foi possível salvar a resposta.");
+  }
+
+  async function removeFaq(id: string) {
+    const { error } = await supabase.from("knowledge_base_faq").delete().eq("id", id);
+    if (error) {
+      toast.error("Não foi possível remover a FAQ.");
+      return;
+    }
+    setFaqs((prev) => (prev ?? []).filter((f) => f.id !== id));
+  }
+
+  async function loadKbDocuments(id: string) {
+    const { data } = await supabase
+      .from("knowledge_base_documents")
+      .select("id, file_name, file_type, size_bytes, storage_path, created_at")
+      .eq("tenant_id", id)
+      .order("created_at", { ascending: false });
+    setKbDocs(data ?? []);
+  }
+
+  useEffect(() => {
+    if (!tenantId) return;
+    loadKbDocuments(tenantId);
+  }, [tenantId]);
+
+  async function handleUploadKbFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0 || !tenantId || session.status !== "ready") return;
+    setUploadingKb(true);
+    try {
+      for (const file of Array.from(fileList)) {
+        const path = `${tenantId}/${crypto.randomUUID()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from("knowledge-base")
+          .upload(path, file);
+        if (uploadError) {
+          toast.error(`Não foi possível enviar ${file.name}: ${uploadError.message}`);
+          continue;
+        }
+        const { error: insertError } = await supabase.from("knowledge_base_documents").insert({
+          tenant_id: tenantId,
+          file_name: file.name,
+          file_type: file.type || (file.name.split(".").pop() ?? "arquivo"),
+          size_bytes: file.size,
+          storage_path: path,
+          uploaded_by: session.staff.id,
+        });
+        if (insertError) {
+          toast.error(`${file.name} foi enviado, mas houve um erro ao registrar o documento.`);
+        }
+      }
+      toast.success("Upload concluído.");
+      await loadKbDocuments(tenantId);
+    } finally {
+      setUploadingKb(false);
+    }
+  }
+
+  async function removeKbDocument(doc: KbDocumentRow) {
+    const { error: storageError } = await supabase.storage
+      .from("knowledge-base")
+      .remove([doc.storage_path]);
+    if (storageError) {
+      toast.error("Não foi possível remover o arquivo do armazenamento.");
+      return;
+    }
+    const { error } = await supabase.from("knowledge_base_documents").delete().eq("id", doc.id);
+    if (error) {
+      toast.error("Arquivo removido do armazenamento, mas houve um erro ao atualizar a lista.");
+      return;
+    }
+    setKbDocs((prev) => (prev ?? []).filter((d) => d.id !== doc.id));
+  }
+
+  async function downloadKbDocument(doc: KbDocumentRow) {
+    const { data, error } = await supabase.storage
+      .from("knowledge-base")
+      .createSignedUrl(doc.storage_path, 60);
+    if (error || !data) {
+      toast.error("Não foi possível gerar o link de download.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  async function loadConsentVersions(id: string) {
+    const { data } = await supabase
+      .from("consent_policy_versions")
+      .select("id, version_number, text, published_at")
+      .eq("tenant_id", id)
+      .order("version_number", { ascending: false });
+    setConsentVersions(data ?? []);
+    if (data && data.length > 0) setConsentDraft(data[0]!.text);
+  }
+
+  useEffect(() => {
+    if (!tenantId) return;
+    loadConsentVersions(tenantId);
+  }, [tenantId]);
+
+  async function publishConsentVersion() {
+    if (!tenantId || session.status !== "ready" || !consentDraft.trim()) return;
+    setPublishingConsent(true);
+    try {
+      const { error } = await supabase.from("consent_policy_versions").insert({
+        tenant_id: tenantId,
+        text: consentDraft,
+        published_by: session.staff.id,
+      });
+      if (error) {
+        toast.error("Não foi possível publicar a nova versão.");
+        return;
+      }
+      toast.success("Nova versão do consentimento publicada.");
+      await loadConsentVersions(tenantId);
+    } finally {
+      setPublishingConsent(false);
+    }
+  }
+
+  async function loadTemplates(id: string) {
+    const { data } = await supabase
+      .from("whatsapp_message_templates")
+      .select("id, name, category, status, body")
+      .eq("tenant_id", id)
+      .order("created_at", { ascending: false });
+    setTemplates(
+      (data ?? []).map((t) => ({
+        ...t,
+        category: t.category as TemplateCategory,
+        status: t.status as TemplateStatus,
+      })),
+    );
+  }
+
+  useEffect(() => {
+    if (!tenantId) return;
+    loadTemplates(tenantId);
+  }, [tenantId]);
+
+  async function addTemplate() {
+    if (!tenantId || !newTemplateName.trim() || !newTemplateBody.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const { error } = await supabase.from("whatsapp_message_templates").insert({
+        tenant_id: tenantId,
+        name: newTemplateName.trim(),
+        category: newTemplateCategory,
+        body: newTemplateBody.trim(),
+      });
+      if (error) {
+        toast.error("Não foi possível adicionar o template.");
+        return;
+      }
+      toast.success("Template adicionado.");
+      setNewTemplateOpen(false);
+      setNewTemplateName("");
+      setNewTemplateBody("");
+      setNewTemplateCategory("utilidade");
+      await loadTemplates(tenantId);
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function changeTemplateStatus(id: string, status: TemplateStatus) {
+    setTemplates((prev) => (prev ?? []).map((t) => (t.id === id ? { ...t, status } : t)));
+    const { error } = await supabase
+      .from("whatsapp_message_templates")
+      .update({ status })
+      .eq("id", id);
+    if (error) toast.error("Não foi possível atualizar o status.");
+  }
+
+  async function removeTemplate(id: string) {
+    const { error } = await supabase.from("whatsapp_message_templates").delete().eq("id", id);
+    if (error) {
+      toast.error("Não foi possível remover o template.");
+      return;
+    }
+    setTemplates((prev) => (prev ?? []).filter((t) => t.id !== id));
   }
 
   async function addCatalogItem() {
@@ -756,8 +1063,8 @@ function ConfiguracoesPage() {
                     className="min-h-28"
                   />
                 </div>
-                <Button onClick={() => toast.success("Configuração do agente salva.")}>
-                  Salvar
+                <Button onClick={handleSaveAgentConfig} disabled={savingAgent}>
+                  {savingAgent && <Loader2 className="size-3.5 animate-spin" />} Salvar
                 </Button>
               </div>
               <div>
@@ -787,60 +1094,118 @@ function ConfiguracoesPage() {
                   <h2 className="text-sm font-semibold text-foreground">
                     Perguntas frequentes (FAQ)
                   </h2>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setFaqs((prev) => [
-                        {
-                          id: crypto.randomUUID(),
-                          pergunta: "Nova pergunta",
-                          resposta: "Resposta padrão.",
-                        },
-                        ...prev,
-                      ])
-                    }
-                  >
+                  <Button size="sm" variant="outline" onClick={addFaq}>
                     <Plus /> Adicionar FAQ
                   </Button>
                 </div>
-                <ul className="space-y-2">
-                  {faqs.map((f) => (
-                    <li key={f.id} className="rounded-lg border border-border p-3">
-                      <p className="text-sm font-medium text-foreground">{f.pergunta}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{f.resposta}</p>
-                    </li>
-                  ))}
-                </ul>
+                {faqs === null ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : faqs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma FAQ cadastrada ainda.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {faqs.map((f) => (
+                      <li key={f.id} className="space-y-1.5 rounded-lg border border-border p-3">
+                        <div className="flex items-start gap-2">
+                          <Input
+                            defaultValue={f.question}
+                            className="h-8 flex-1 text-sm font-medium"
+                            onBlur={(e) => updateFaqQuestion(f.id, e.target.value)}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeFaq(f.id)}
+                            aria-label="Remover"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                        <Textarea
+                          defaultValue={f.answer}
+                          className="min-h-16 text-xs"
+                          onBlur={(e) => updateFaqAnswer(f.id, e.target.value)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div>
                 <h2 className="mb-3 text-sm font-semibold text-foreground">
                   Documentos para RAG (busca semântica)
                 </h2>
-                <div className="mb-3 rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
-                  <Upload className="mx-auto mb-2 size-6 text-muted-foreground" />
+                <label className="mb-3 block cursor-pointer rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center">
+                  {uploadingKb ? (
+                    <Loader2 className="mx-auto mb-2 size-6 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Upload className="mx-auto mb-2 size-6 text-muted-foreground" />
+                  )}
                   <p className="text-sm font-medium text-foreground">
-                    Arraste PDFs ou manuais aqui
+                    {uploadingKb ? "Enviando..." : "Arraste PDFs ou manuais aqui"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     A IA prioriza esses documentos antes de responder de forma genérica
                   </p>
-                  <input type="file" className="mt-3 w-full cursor-pointer text-xs" multiple />
-                </div>
-                <ul className="divide-y divide-border rounded-lg border border-border">
-                  {kbDocuments.map((doc) => (
-                    <li key={doc.id} className="flex items-center gap-3 p-3">
-                      <FileText className="size-4 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-foreground">{doc.nome}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.tipo} · {doc.tamanhoKb}KB · enviado em {doc.dataUpload}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                  <input
+                    type="file"
+                    className="sr-only"
+                    multiple
+                    disabled={uploadingKb}
+                    onChange={(e) => {
+                      handleUploadKbFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                {kbDocs === null ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : kbDocs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum documento enviado ainda.</p>
+                ) : (
+                  <ul className="divide-y divide-border rounded-lg border border-border">
+                    {kbDocs.map((doc) => (
+                      <li key={doc.id} className="flex items-center gap-3 p-3">
+                        <FileText className="size-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm text-foreground">{doc.file_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {Math.round(doc.size_bytes / 1024)}KB · enviado em{" "}
+                            {new Date(doc.created_at).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 shrink-0 text-muted-foreground"
+                          onClick={() => downloadKbDocument(doc)}
+                          aria-label="Baixar"
+                        >
+                          <Download className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeKbDocument(doc)}
+                          aria-label="Remover"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           )}
@@ -852,13 +1217,16 @@ function ConfiguracoesPage() {
                   Texto de consentimento vigente
                 </h2>
                 <Textarea
-                  value={consentText}
-                  onChange={(e) => setConsentText(e.target.value)}
+                  value={consentDraft}
+                  onChange={(e) => setConsentDraft(e.target.value)}
                   className="min-h-40"
                 />
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button>Salvar nova versão</Button>
+                    <Button disabled={!consentDraft.trim() || publishingConsent}>
+                      {publishingConsent && <Loader2 className="size-3.5 animate-spin" />} Salvar
+                      nova versão
+                    </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
@@ -871,9 +1239,7 @@ function ConfiguracoesPage() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => toast.success("Nova versão do consentimento publicada.")}
-                      >
+                      <AlertDialogAction onClick={publishConsentVersion}>
                         Confirmar publicação
                       </AlertDialogAction>
                     </AlertDialogFooter>
@@ -884,26 +1250,109 @@ function ConfiguracoesPage() {
                 <p className="mb-2 text-xs font-semibold text-muted-foreground">
                   Histórico de versões
                 </p>
-                <ul className="space-y-2">
-                  {consentVersions.map((v) => (
-                    <li key={v.versao} className="rounded-lg border border-border p-3 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-foreground">{v.versao}</span>
-                        <span className="text-muted-foreground">{v.dataPublicacao}</span>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-muted-foreground">{v.texto}</p>
-                    </li>
-                  ))}
-                </ul>
+                {consentVersions === null ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : consentVersions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma versão publicada ainda.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {consentVersions.map((v) => (
+                      <li key={v.id} className="rounded-lg border border-border p-3 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-foreground">v{v.version_number}</span>
+                          <span className="text-muted-foreground">
+                            {new Date(v.published_at).toLocaleDateString("pt-BR")}
+                          </span>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-muted-foreground">{v.text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           )}
 
           {active === "templates" && (
             <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-foreground">
-                Templates aprovados pela Meta
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-foreground">
+                  Templates aprovados pela Meta
+                </h2>
+                <Dialog open={newTemplateOpen} onOpenChange={setNewTemplateOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm">
+                      <Plus /> Adicionar template
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Novo template de mensagem</DialogTitle>
+                      <DialogDescription>
+                        Registre um template já submetido para aprovação da Meta. O status pode ser
+                        atualizado depois, conforme o retorno da revisão.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="new-tpl-name" className="mb-1.5 block text-xs">
+                          Nome (snake_case, como na Meta)
+                        </Label>
+                        <Input
+                          id="new-tpl-name"
+                          value={newTemplateName}
+                          onChange={(e) => setNewTemplateName(e.target.value)}
+                          placeholder="cobranca_documento_mensal"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="new-tpl-category" className="mb-1.5 block text-xs">
+                          Categoria
+                        </Label>
+                        <Select
+                          value={newTemplateCategory}
+                          onValueChange={(v) => setNewTemplateCategory(v as TemplateCategory)}
+                        >
+                          <SelectTrigger id="new-tpl-category">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="utilidade">Utilidade</SelectItem>
+                            <SelectItem value="marketing">Marketing</SelectItem>
+                            <SelectItem value="autenticacao">Autenticação</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="new-tpl-body" className="mb-1.5 block text-xs">
+                          Corpo da mensagem
+                        </Label>
+                        <Textarea
+                          id="new-tpl-body"
+                          value={newTemplateBody}
+                          onChange={(e) => setNewTemplateBody(e.target.value)}
+                          placeholder="Olá {{1}}! ..."
+                          className="min-h-24"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        onClick={addTemplate}
+                        disabled={
+                          savingTemplate || !newTemplateName.trim() || !newTemplateBody.trim()
+                        }
+                      >
+                        {savingTemplate && <Loader2 className="size-3.5 animate-spin" />} Adicionar
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
               <div className="overflow-hidden rounded-lg border border-border">
                 <Table>
                   <TableHeader>
@@ -912,25 +1361,61 @@ function ConfiguracoesPage() {
                       <TableHead>Categoria</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Corpo</TableHead>
+                      <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {messageTemplates.map((t) => (
+                    {(templates ?? []).map((t) => (
                       <TableRow key={t.id}>
-                        <TableCell className="font-mono text-xs font-medium">{t.nome}</TableCell>
-                        <TableCell className="text-muted-foreground">{t.categoria}</TableCell>
+                        <TableCell className="font-mono text-xs font-medium">{t.name}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {templateCategoryLabel[t.category]}
+                        </TableCell>
                         <TableCell>
-                          <Badge className={cn("border capitalize", templateStatusStyle[t.status])}>
-                            {t.status === "pendente" ? "Pendente de aprovação da Meta" : t.status}
-                          </Badge>
+                          <Select
+                            value={t.status}
+                            onValueChange={(v) => changeTemplateStatus(t.id, v as TemplateStatus)}
+                          >
+                            <SelectTrigger
+                              className={cn(
+                                "h-7 w-auto border text-xs",
+                                templateStatusStyle[t.status],
+                              )}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="aprovado">Aprovado</SelectItem>
+                              <SelectItem value="pendente">
+                                Pendente de aprovação da Meta
+                              </SelectItem>
+                              <SelectItem value="rejeitado">Rejeitado</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell className="max-w-xs truncate text-xs text-muted-foreground">
-                          {t.corpo}
+                          {t.body}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeTemplate(t.id)}
+                            aria-label="Remover"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+                {templates !== null && templates.length === 0 && (
+                  <p className="p-4 text-center text-xs text-muted-foreground">
+                    Nenhum template cadastrado ainda.
+                  </p>
+                )}
               </div>
             </div>
           )}
