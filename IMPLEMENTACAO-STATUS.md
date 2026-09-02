@@ -3,7 +3,9 @@
 > Documento gerado para dar visibilidade do que já foi construído no repositório,
 > a partir do PRD (`PRDAtendimentoIAWhatsApp.md` — **não alterado por este
 > arquivo nem pelo trabalho descrito aqui**). Reflete o estado da branch
-> `claude/criar-telas-prd-78u21w` até o commit `cedcd52` (PR #12, em revisão).
+> `claude/criar-telas-prd-78u21w` até o PR #12 (`2647952`, já mergeado),
+> mais o lembrete automático de compromisso (RF06) descrito abaixo,
+> adicionado depois.
 
 ## Resumo por tela
 
@@ -23,6 +25,7 @@
 | — | Copiloto interno (RF11 — resumir / sugerir resposta) | ✅ Real | `src/components/common/copilot-widget.tsx`, `src/lib/copilot-actions.ts` |
 | — | RAG semântico sobre PDFs da Base de Conhecimento (RF07) | ✅ Real | `src/lib/knowledge-base/` |
 | — | Overflow de escalonamento (RF05) | ✅ Real (job agendado) | `supabase/migrations/20260902200000_escalation_overflow_job.sql` |
+| — | Lembrete automático de compromisso (RF06) | ✅ Real (job via cron externo) | `src/lib/jobs/appointment-reminders.server.ts` |
 
 Todas as telas do painel estão ligadas a dados reais do Supabase — não há
 mais nenhuma tela rodando sobre `mock-data.ts` (o arquivo hoje só guarda o
@@ -80,6 +83,35 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
   leads em reuniões), calculadas por functions SQL
   (`supabase/migrations/20260902250000_report_metrics.sql`).
 
+## Lembrete automático de compromisso (RF06)
+
+> Adicionado após o PR #12, fechando uma das duas pendências que a v1.6 do
+> PRD reclassificou como bloqueio de Fase 1 (a outra é a checagem de
+> conflito de agenda, que já estava implementada desde o PR #5 via a
+> constraint `appointments_no_overlap_per_staff` — a v1.6 do PRD listava
+> isso como "não confirmado", mas o código já resolvia).
+
+- **O que faz:** varre `appointments` futuros sem `reminder_sent_at`, dentro
+  de uma janela fixa de 24h antes do início, e envia uma mensagem de
+  WhatsApp para cada contato vinculado ao cliente (ou ao lead) do
+  compromisso — reaproveitando `findOrCreateConversation` do webhook
+  (`meta-cloud-webhook.server.ts`) para registrar a mensagem no histórico da
+  conversa como qualquer outra.
+- **Por que não é um job pg_cron como o overflow do RF05:** enviar de
+  verdade depende de resolver o `WhatsAppProvider` e os segredos do tenant
+  (`tenant_integration_secrets`), algo que só o runtime da aplicação faz —
+  SQL puro dentro do Postgres não tem acesso a isso. Em vez disso, é um
+  endpoint HTTP (`POST /api/cron/appointment-reminders`, interceptado em
+  `src/server.ts`) autenticado por segredo compartilhado
+  (`authenticateCronRequest`/`LOVABLE_CRON_SECRET`, já gerado no projeto e
+  até agora sem nenhum endpoint usando).
+- **Pendência operacional (fora do código):** falta cadastrar, no
+  agendador externo (Lovable Cloud Cron), uma chamada periódica (sugestão:
+  a cada 15–30 min) para essa URL com o segredo configurado — isso não é
+  feito por migration nem por código, é configuração de painel, no mesmo
+  espírito de "URL do webhook cadastrada no painel da Meta" já exigido pelo
+  RF03.
+
 ## Gaps conhecidos / fora de escopo deste pacote
 
 - **CSAT (Relatórios)** — não existe nenhuma coleta de satisfação no
@@ -113,4 +145,5 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
 20260902230000_knowledge_base_semantic_search.sql
 20260902240000_document_submissions_due_date_snapshot.sql
 20260902250000_report_metrics.sql
+20260902260000_appointment_reminders.sql
 ```

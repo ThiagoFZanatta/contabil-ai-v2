@@ -159,6 +159,7 @@ export type Database = {
           id: string;
           lead_id: string | null;
           origin: string;
+          reminder_sent_at: string | null;
           staff_id: string;
           start_at: string;
           tenant_id: string;
@@ -174,6 +175,7 @@ export type Database = {
           id?: string;
           lead_id?: string | null;
           origin?: string;
+          reminder_sent_at?: string | null;
           staff_id: string;
           start_at: string;
           tenant_id: string;
@@ -189,6 +191,7 @@ export type Database = {
           id?: string;
           lead_id?: string | null;
           origin?: string;
+          reminder_sent_at?: string | null;
           staff_id?: string;
           start_at?: string;
           tenant_id?: string;
