@@ -8,6 +8,45 @@ export type Database = {
   };
   public: {
     Tables: {
+      ai_agent_config: {
+        Row: {
+          agent_name: string;
+          persona_tone: string;
+          tenant_id: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          agent_name?: string;
+          persona_tone?: string;
+          tenant_id: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          agent_name?: string;
+          persona_tone?: string;
+          tenant_id?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_config_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: true;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_agent_config_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       appointments: {
         Row: {
           appointment_type: string;
@@ -236,6 +275,48 @@ export type Database = {
           },
         ];
       };
+      consent_policy_versions: {
+        Row: {
+          id: string;
+          published_at: string;
+          published_by: string | null;
+          tenant_id: string;
+          text: string;
+          version_number: number;
+        };
+        Insert: {
+          id?: string;
+          published_at?: string;
+          published_by?: string | null;
+          tenant_id: string;
+          text: string;
+          version_number?: number;
+        };
+        Update: {
+          id?: string;
+          published_at?: string;
+          published_by?: string | null;
+          tenant_id?: string;
+          text?: string;
+          version_number?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "consent_policy_versions_published_by_fkey";
+            columns: ["published_by"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "consent_policy_versions_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       contacts: {
         Row: {
           created_at: string;
@@ -367,6 +448,89 @@ export type Database = {
           },
           {
             foreignKeyName: "document_submissions_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      knowledge_base_documents: {
+        Row: {
+          created_at: string;
+          file_name: string;
+          file_type: string;
+          id: string;
+          size_bytes: number;
+          storage_path: string;
+          tenant_id: string;
+          uploaded_by: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          file_name: string;
+          file_type: string;
+          id?: string;
+          size_bytes: number;
+          storage_path: string;
+          tenant_id: string;
+          uploaded_by?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          file_name?: string;
+          file_type?: string;
+          id?: string;
+          size_bytes?: number;
+          storage_path?: string;
+          tenant_id?: string;
+          uploaded_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_documents_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "knowledge_base_documents_uploaded_by_fkey";
+            columns: ["uploaded_by"];
+            isOneToOne: false;
+            referencedRelation: "staff";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      knowledge_base_faq: {
+        Row: {
+          answer: string;
+          created_at: string;
+          id: string;
+          question: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          answer: string;
+          created_at?: string;
+          id?: string;
+          question: string;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          answer?: string;
+          created_at?: string;
+          id?: string;
+          question?: string;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_faq_tenant_id_fkey";
             columns: ["tenant_id"];
             isOneToOne: false;
             referencedRelation: "tenants";
@@ -647,6 +811,47 @@ export type Database = {
           whatsapp_number?: string | null;
         };
         Relationships: [];
+      };
+      whatsapp_message_templates: {
+        Row: {
+          body: string;
+          category: string;
+          created_at: string;
+          id: string;
+          name: string;
+          status: string;
+          tenant_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          body: string;
+          category: string;
+          created_at?: string;
+          id?: string;
+          name: string;
+          status?: string;
+          tenant_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string;
+          category?: string;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          status?: string;
+          tenant_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_message_templates_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: {
