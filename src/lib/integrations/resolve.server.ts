@@ -1,11 +1,11 @@
 // Resolve as credenciais reais de um tenant e monta as instâncias dos
-// providers (Meta Cloud API / Anthropic) já prontas para uso. Nunca é
+// providers (Meta Cloud API / OpenAI) já prontas para uso. Nunca é
 // importado no topo de um arquivo que vai para o bundle do cliente — só
 // dinamicamente, de dentro de handlers de server function, já que este
 // arquivo por sua vez importa o supabaseAdmin (service role) no topo, o
 // que só é seguro em módulos ".server.ts".
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { createAnthropicProvider } from "@/lib/integrations/ai/anthropic-provider";
+import { createOpenAiProvider } from "@/lib/integrations/ai/openai-provider";
 import type { AiProvider } from "@/lib/integrations/ai/types";
 import { createMetaCloudProvider } from "@/lib/integrations/whatsapp/meta-cloud-provider";
 import type { WhatsAppProvider } from "@/lib/integrations/whatsapp/types";
@@ -45,19 +45,19 @@ export async function resolveWhatsAppProvider(tenantId: string): Promise<WhatsAp
 export async function resolveAiProvider(tenantId: string): Promise<AiProvider> {
   const { data: integration } = await supabaseAdmin
     .from("tenant_integrations")
-    .select("is_configured")
+    .select("is_configured, ai_selected_model")
     .eq("tenant_id", tenantId)
-    .eq("provider", "anthropic")
+    .eq("provider", "openai")
     .maybeSingle();
 
   if (!integration?.is_configured) {
-    return createAnthropicProvider(null);
+    return createOpenAiProvider(null);
   }
 
-  const apiKey = await getSecret(tenantId, "anthropic");
+  const apiKey = await getSecret(tenantId, "openai");
   if (!apiKey) {
-    return createAnthropicProvider(null);
+    return createOpenAiProvider(null);
   }
 
-  return createAnthropicProvider({ apiKey });
+  return createOpenAiProvider({ apiKey, model: integration.ai_selected_model });
 }

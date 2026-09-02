@@ -107,13 +107,13 @@ export const saveWhatsAppCredential = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-const saveAnthropicInput = z.object({
+const saveOpenAiInput = z.object({
   apiKey: z.string().trim().min(1, "Informe a chave de API."),
 });
 
-export const saveAnthropicCredential = createServerFn({ method: "POST" })
+export const saveOpenAiCredential = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((input: unknown) => saveAnthropicInput.parse(input))
+  .validator((input: unknown) => saveOpenAiInput.parse(input))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const caller = await requireAdminCaller(supabase, userId);
@@ -123,7 +123,7 @@ export const saveAnthropicCredential = createServerFn({ method: "POST" })
     const { error: secretError } = await supabaseAdmin.from("tenant_integration_secrets").upsert(
       {
         tenant_id: caller.tenant_id,
-        provider: "anthropic",
+        provider: "openai",
         secret_value: data.apiKey,
       },
       { onConflict: "tenant_id,provider" },
@@ -132,10 +132,13 @@ export const saveAnthropicCredential = createServerFn({ method: "POST" })
       throw new Error(`Não foi possível salvar a chave: ${secretError.message}`);
     }
 
+    // Só toca is_configured/metadata aqui — ai_selected_model, se a linha já
+    // existir, não é reescrito para o default pelo upsert (coluna omitida do
+    // payload não entra no "on conflict do update"). Ver saveAiSelectedModel.
     const { error: integrationError } = await supabaseAdmin.from("tenant_integrations").upsert(
       {
         tenant_id: caller.tenant_id,
-        provider: "anthropic",
+        provider: "openai",
         is_configured: true,
         metadata: {},
         updated_by: userId,
@@ -149,8 +152,40 @@ export const saveAnthropicCredential = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+const saveAiSelectedModelInput = z.object({
+  model: z.enum(["gpt-5-mini", "gpt-5", "gpt-5-nano"]),
+});
+
+// Troca só o modelo GPT curado (PRD 10.1/RF11, v1.5) sem exigir reenviar a
+// chave de API — a credencial e a escolha de modelo são independentes na
+// UI (Tela 8), mesmo vivendo na mesma linha de tenant_integrations.
+export const saveAiSelectedModel = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => saveAiSelectedModelInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const caller = await requireAdminCaller(supabase, userId);
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { error } = await supabaseAdmin.from("tenant_integrations").upsert(
+      {
+        tenant_id: caller.tenant_id,
+        provider: "openai",
+        ai_selected_model: data.model,
+        updated_by: userId,
+      },
+      { onConflict: "tenant_id,provider" },
+    );
+    if (error) {
+      throw new Error(`Não foi possível salvar o modelo selecionado: ${error.message}`);
+    }
+
+    return { ok: true as const };
+  });
+
 const providerInput = z.object({
-  provider: z.enum(["whatsapp", "anthropic"]),
+  provider: z.enum(["whatsapp", "openai"]),
 });
 
 export const removeIntegrationCredential = createServerFn({ method: "POST" })
@@ -212,7 +247,7 @@ export const testWhatsAppConnection = createServerFn({ method: "POST" })
     return provider.testConnection();
   });
 
-export const testAnthropicConnection = createServerFn({ method: "POST" })
+export const testOpenAiConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
@@ -222,7 +257,7 @@ export const testAnthropicConnection = createServerFn({ method: "POST" })
     const provider = await resolveAiProvider(caller.tenant_id);
 
     if (!provider.isConfigured()) {
-      return { ok: false as const, error: "Anthropic ainda não configurado para este tenant." };
+      return { ok: false as const, error: "OpenAI ainda não configurado para este tenant." };
     }
 
     return provider.testConnection();

@@ -227,6 +227,35 @@ export type Database = {
           },
         ];
       };
+      business_hours: {
+        Row: {
+          day_of_week: number;
+          end_time: string;
+          start_time: string;
+          tenant_id: string;
+        };
+        Insert: {
+          day_of_week: number;
+          end_time: string;
+          start_time: string;
+          tenant_id: string;
+        };
+        Update: {
+          day_of_week?: number;
+          end_time?: string;
+          start_time?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "business_hours_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       client_contact_links: {
         Row: {
           client_id: string;
@@ -1157,6 +1186,7 @@ export type Database = {
       };
       tenant_integrations: {
         Row: {
+          ai_selected_model: string;
           is_configured: boolean;
           metadata: Json;
           provider: string;
@@ -1165,6 +1195,7 @@ export type Database = {
           updated_by: string | null;
         };
         Insert: {
+          ai_selected_model?: string;
           is_configured?: boolean;
           metadata?: Json;
           provider: string;
@@ -1173,6 +1204,7 @@ export type Database = {
           updated_by?: string | null;
         };
         Update: {
+          ai_selected_model?: string;
           is_configured?: boolean;
           metadata?: Json;
           provider?: string;

@@ -1,12 +1,11 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { runAgentTurn } from "@/lib/agent/orchestrator.server";
 
 // Recebe as entregas do webhook da Meta Cloud API (RF03) — o outro lado da
-// integração já escrita em meta-cloud-provider.ts (que só envia). Faz o
-// mínimo necessário para uma mensagem inbound existir de verdade no banco:
-// identifica o tenant pelo phone_number_id, valida a assinatura, encontra
-// ou cria o contato/lead e a conversa, e grava a mensagem. A geração de
-// resposta pela IA (RF03/10.2) é a próxima etapa, ainda não construída
-// aqui — este arquivo só ingere.
+// integração já escrita em meta-cloud-provider.ts (que só envia). Identifica
+// o tenant pelo phone_number_id, valida a assinatura, encontra ou cria o
+// contato/lead e a conversa, grava a mensagem, e então aciona o motor de IA
+// (orchestrator.server.ts) para decidir e enviar a resposta.
 
 interface MetaWebhookMessage {
   from: string;
@@ -148,7 +147,10 @@ async function findOrCreateConversation(
   return created.id;
 }
 
-async function ingestInboundMessage(tenantId: string, message: MetaWebhookMessage): Promise<void> {
+async function ingestInboundMessage(
+  tenantId: string,
+  message: MetaWebhookMessage,
+): Promise<string | null> {
   const body =
     message.type === "text" && message.text
       ? message.text.body
@@ -166,10 +168,14 @@ async function ingestInboundMessage(tenantId: string, message: MetaWebhookMessag
   });
 
   // 23505 = reentrega da Meta do mesmo wamid (unique parcial em
-  // provider_message_id) — idempotência esperada, não é erro de verdade.
-  if (error && error.code !== "23505") {
+  // provider_message_id) — idempotência esperada, não aciona o agente de
+  // novo para a mesma mensagem.
+  if (error) {
+    if (error.code === "23505") return null;
     throw new Error(`Não foi possível gravar a mensagem ${message.id}: ${error.message}`);
   }
+
+  return conversationId;
 }
 
 async function handleIncoming(request: Request): Promise<Response> {
@@ -223,7 +229,19 @@ async function handleIncoming(request: Request): Promise<Response> {
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       for (const message of change.value.messages ?? []) {
-        await ingestInboundMessage(tenantId, message);
+        const conversationId = await ingestInboundMessage(tenantId, message);
+        if (!conversationId) continue;
+
+        // O agente nunca deve derrubar o ack do webhook — se a IA ou o
+        // envio de WhatsApp falhar, a mensagem já está gravada e a Meta não
+        // deve reentregar por causa disso. Falha aqui fica só no log do
+        // runtime; a conversa segue visível na Inbox (Tela 5) mesmo sem
+        // resposta automática.
+        try {
+          await runAgentTurn({ tenantId, conversationId });
+        } catch (err) {
+          console.error(`runAgentTurn falhou para a conversa ${conversationId}:`, err);
+        }
       }
     }
   }
