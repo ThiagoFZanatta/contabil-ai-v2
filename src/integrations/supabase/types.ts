@@ -685,6 +685,7 @@ export type Database = {
       document_submissions: {
         Row: {
           client_document_config_id: string;
+          due_date_at_submission: string | null;
           id: string;
           note: string;
           submitted_at: string;
@@ -692,6 +693,7 @@ export type Database = {
         };
         Insert: {
           client_document_config_id: string;
+          due_date_at_submission?: string | null;
           id?: string;
           note?: string;
           submitted_at?: string;
@@ -699,6 +701,7 @@ export type Database = {
         };
         Update: {
           client_document_config_id?: string;
+          due_date_at_submission?: string | null;
           id?: string;
           note?: string;
           submitted_at?: string;
@@ -1389,6 +1392,22 @@ export type Database = {
           file_name: string;
           similarity: number;
         }[];
+      };
+      report_first_response_time: {
+        Args: { p_period_days?: number };
+        Returns: { day: string; avg_minutes: number }[];
+      };
+      report_ia_resolution_rate: {
+        Args: { p_period_days?: number };
+        Returns: { day: string; pct_ia: number }[];
+      };
+      report_document_on_time_rate: {
+        Args: { p_period_days?: number };
+        Returns: { day: string; pct_on_time: number }[];
+      };
+      report_lead_conversion_rate: {
+        Args: { p_period_days?: number };
+        Returns: { day: string; pct_conversion: number }[];
       };
     };
     Enums: {

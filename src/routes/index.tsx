@@ -10,7 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCurrentStaff } from "@/hooks/use-current-staff";
 import { supabase } from "@/integrations/supabase/client";
-import { conversations, currentStaff, departmentLabel } from "@/lib/mock-data";
+
+interface QueuePreviewItem {
+  conversationId: string;
+  contactName: string;
+  lastMessage: string;
+  waitMin: number;
+  isOverflow: boolean;
+  departmentSlug: string;
+}
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -43,16 +51,87 @@ function Index() {
   const [documentosPendentes, setDocumentosPendentes] = useState<number | null>(null);
   const [compromissosHoje, setCompromissosHoje] = useState<AppointmentToday[] | null>(null);
   const [leadsNovos, setLeadsNovos] = useState<number | null>(null);
+  const [filaQueue, setFilaQueue] = useState<QueuePreviewItem[] | null>(null);
+  const [departmentNames, setDepartmentNames] = useState<Map<string, string>>(new Map());
 
   const hoje = useMemo(() => new Date(), []);
   const saudacao =
     hoje.getHours() < 12 ? "Bom dia" : hoje.getHours() < 18 ? "Boa tarde" : "Boa noite";
 
-  // "Conversas na fila" ainda depende do WhatsApp/IA (RF03), que não está
-  // conectado — mantém a prévia com dados de exemplo até essa etapa.
-  const filaDoMeuDepartamento = conversations.filter((c) =>
-    currentStaff.departamentos.includes(c.departamento),
-  );
+  const filaDoMeuDepartamento = useMemo(() => {
+    if (!filaQueue || session.status !== "ready") return [];
+    return filaQueue.filter(
+      (c) => session.staff.departmentSlugs.includes(c.departmentSlug) || c.isOverflow,
+    );
+  }, [filaQueue, session]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    supabase
+      .from("departments")
+      .select("slug, name")
+      .eq("tenant_id", tenantId)
+      .then(({ data }) => setDepartmentNames(new Map((data ?? []).map((d) => [d.slug, d.name]))));
+  }, [tenantId]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+
+    supabase
+      .from("escalations")
+      .select(
+        `id, conversation_id, escalated_at, is_overflow, department_id,
+         departments ( slug ),
+         conversations ( id, contact_id, lead_id, contacts ( name ), leads ( name ) )`,
+      )
+      .eq("tenant_id", tenantId)
+      .is("resolved_at", null)
+      .order("escalated_at", { ascending: true })
+      .then(async ({ data: escalationRows }) => {
+        const rows = escalationRows ?? [];
+        const now = Date.now();
+        const seen = new Set<string>();
+        const items: QueuePreviewItem[] = [];
+        for (const e of rows) {
+          const conv = e.conversations as unknown as {
+            id: string;
+            contacts: { name: string } | null;
+            leads: { name: string } | null;
+          } | null;
+          if (!conv || seen.has(conv.id)) continue;
+          seen.add(conv.id);
+          const dept = e.departments as unknown as { slug: string } | null;
+          items.push({
+            conversationId: conv.id,
+            contactName: conv.contacts?.name ?? conv.leads?.name ?? "Contato",
+            lastMessage: "",
+            waitMin: Math.max(0, Math.round((now - new Date(e.escalated_at).getTime()) / 60000)),
+            isOverflow: e.is_overflow,
+            departmentSlug: dept?.slug ?? "",
+          });
+        }
+
+        const conversationIds = items.map((i) => i.conversationId);
+        if (conversationIds.length > 0) {
+          const { data: recentMessages } = await supabase
+            .from("messages")
+            .select("conversation_id, body")
+            .in("conversation_id", conversationIds)
+            .order("created_at", { ascending: false });
+          const lastByConversation = new Map<string, string>();
+          for (const m of recentMessages ?? []) {
+            if (!lastByConversation.has(m.conversation_id)) {
+              lastByConversation.set(m.conversation_id, m.body);
+            }
+          }
+          for (const item of items) {
+            item.lastMessage = lastByConversation.get(item.conversationId) ?? "";
+          }
+        }
+
+        setFilaQueue(items);
+      });
+  }, [tenantId]);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -148,8 +227,8 @@ function Index() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Link to="/conversas">
           <StatCard
-            label="Conversas na fila (prévia)"
-            value={filaDoMeuDepartamento.length}
+            label="Conversas na fila"
+            value={filaQueue === null ? "—" : filaDoMeuDepartamento.length}
             icon={MessagesSquare}
             tone="primary"
           />
@@ -178,16 +257,20 @@ function Index() {
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-border bg-card p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">
-              Conversas aguardando você (prévia)
-            </h3>
+            <h3 className="text-sm font-semibold text-foreground">Conversas aguardando você</h3>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/conversas">
                 Ver todas <ArrowRight />
               </Link>
             </Button>
           </div>
-          {filaDoMeuDepartamento.length === 0 ? (
+          {filaQueue === null ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : filaDoMeuDepartamento.length === 0 ? (
             <EmptyState
               icon={MessagesSquare}
               title="Nenhuma conversa pendente"
@@ -196,14 +279,14 @@ function Index() {
           ) : (
             <ul className="space-y-1">
               {filaDoMeuDepartamento.slice(0, 5).map((c) => (
-                <li key={c.id}>
+                <li key={c.conversationId}>
                   <Link
                     to="/conversas"
                     className="flex items-center gap-3 rounded-lg p-2.5 hover:bg-accent"
                   >
                     <Avatar className="size-9">
                       <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-                        {c.nomeContato
+                        {c.contactName
                           .split(" ")
                           .map((p) => p[0])
                           .slice(0, 2)
@@ -212,20 +295,22 @@ function Index() {
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
-                        {c.nomeContato}
+                        {c.contactName}
                       </p>
-                      <p className="truncate text-xs text-muted-foreground">{c.ultimaMensagem}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {c.lastMessage || "Sem mensagens ainda"}
+                      </p>
                     </div>
                     <div className="shrink-0 text-right">
                       <Badge
                         variant="outline"
                         className={
-                          c.overflow
+                          c.isOverflow
                             ? "border-destructive/40 text-destructive"
                             : "border-warning/40 text-warning-foreground"
                         }
                       >
-                        há {c.esperaMin} min
+                        há {c.waitMin} min
                       </Badge>
                     </div>
                   </Link>
@@ -291,7 +376,7 @@ function Index() {
 
       <p className="mt-6 text-xs text-muted-foreground">
         Fila exibida para os departamentos:{" "}
-        {currentStaff.departamentos.map(departmentLabel).join(", ")}.
+        {session.staff.departmentSlugs.map((slug) => departmentNames.get(slug) ?? slug).join(", ")}.
       </p>
     </AppShell>
   );

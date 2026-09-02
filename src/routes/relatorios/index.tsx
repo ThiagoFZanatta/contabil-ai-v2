@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, XAxis } from "recharts";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Smile } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { EmptyState } from "@/components/common/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   ChartContainer,
   ChartTooltip,
@@ -10,6 +12,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
+import { useCurrentStaff } from "@/hooks/use-current-staff";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/relatorios/")({
   component: RelatoriosPage,
@@ -21,23 +25,19 @@ const periods = [
   { value: 90, label: "Últimos 90 dias" },
 ];
 
-function seriesFor(days: number, base: number, amplitude: number, seed: number) {
-  const points = Math.min(days, 14);
-  const step = Math.max(1, Math.floor(days / points));
-  return Array.from({ length: points }).map((_, i) => {
-    const dayOffset = (points - i) * step;
-    const noise = Math.sin(seed + i * 1.3) * amplitude;
-    const value = Math.max(0, base + noise + i * (amplitude / points) * 0.4);
-    const d = new Date(2026, 8, 1);
-    d.setDate(d.getDate() - dayOffset);
-    return {
-      label: d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
-      value: Math.round(value * 10) / 10,
-    };
+interface SeriesPoint {
+  label: string;
+  value: number;
+}
+
+function formatDay(iso: string) {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
   });
 }
 
-function trendOf(data: { value: number }[]) {
+function trendOf(data: SeriesPoint[]) {
   const first = data[0]?.value ?? 0;
   const last = data[data.length - 1]?.value ?? 0;
   const diff = first === 0 ? 0 : ((last - first) / first) * 100;
@@ -54,16 +54,29 @@ function MetricChart({
 }: {
   title: string;
   unit: string;
-  data: { label: string; value: number }[];
+  data: SeriesPoint[];
   goodDirection: "up" | "down";
   chartType?: "line" | "bar";
   color: string;
 }) {
+  const config: ChartConfig = { value: { label: title, color } };
+
+  if (data.length === 0) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-5">
+        <p className="mb-3 text-sm text-muted-foreground">{title}</p>
+        <EmptyState
+          icon={goodDirection === "up" ? ArrowUp : ArrowDown}
+          title="Sem dados neste período"
+          description="Ainda não há atividade suficiente para calcular esta métrica."
+        />
+      </div>
+    );
+  }
+
   const current = data[data.length - 1]?.value ?? 0;
   const trend = trendOf(data);
   const improved = goodDirection === "up" ? trend >= 0 : trend <= 0;
-
-  const config: ChartConfig = { value: { label: title, color } };
 
   return (
     <div className="rounded-xl border border-border bg-card p-5">
@@ -125,15 +138,64 @@ function MetricChart({
 }
 
 function RelatoriosPage() {
+  const session = useCurrentStaff();
+  const tenantId = session.status === "ready" ? session.staff.tenantId : null;
+
   const [period, setPeriod] = useState(30);
+  const [tempoResposta, setTempoResposta] = useState<SeriesPoint[] | null>(null);
+  const [resolvidoIA, setResolvidoIA] = useState<SeriesPoint[] | null>(null);
+  const [documentosPrazo, setDocumentosPrazo] = useState<SeriesPoint[] | null>(null);
+  const [conversaoLeads, setConversaoLeads] = useState<SeriesPoint[] | null>(null);
 
-  const tempoResposta = useMemo(() => seriesFor(period, 4.2, 1.2, 1), [period]);
-  const resolvidoIA = useMemo(() => seriesFor(period, 58, 8, 2), [period]);
-  const documentosPrazo = useMemo(() => seriesFor(period, 74, 10, 3), [period]);
-  const csat = useMemo(() => seriesFor(period, 4.4, 0.3, 4), [period]);
-  const conversaoLeads = useMemo(() => seriesFor(period, 22, 6, 5), [period]);
+  useEffect(() => {
+    if (!tenantId) return;
+    setTempoResposta(null);
+    setResolvidoIA(null);
+    setDocumentosPrazo(null);
+    setConversaoLeads(null);
 
-  const poucosPontos = period <= 7;
+    supabase.rpc("report_first_response_time", { p_period_days: period }).then(({ data }) => {
+      setTempoResposta(
+        (data ?? []).map((r) => ({
+          label: formatDay(r.day),
+          value: Math.round(r.avg_minutes * 10) / 10,
+        })),
+      );
+    });
+
+    supabase.rpc("report_ia_resolution_rate", { p_period_days: period }).then(({ data }) => {
+      setResolvidoIA(
+        (data ?? []).map((r) => ({
+          label: formatDay(r.day),
+          value: Math.round(r.pct_ia * 10) / 10,
+        })),
+      );
+    });
+
+    supabase.rpc("report_document_on_time_rate", { p_period_days: period }).then(({ data }) => {
+      setDocumentosPrazo(
+        (data ?? []).map((r) => ({
+          label: formatDay(r.day),
+          value: Math.round(r.pct_on_time * 10) / 10,
+        })),
+      );
+    });
+
+    supabase.rpc("report_lead_conversion_rate", { p_period_days: period }).then(({ data }) => {
+      setConversaoLeads(
+        (data ?? []).map((r) => ({
+          label: formatDay(r.day),
+          value: Math.round(r.pct_conversion * 10) / 10,
+        })),
+      );
+    });
+  }, [tenantId, period]);
+
+  const loading =
+    tempoResposta === null ||
+    resolvidoIA === null ||
+    documentosPrazo === null ||
+    conversaoLeads === null;
 
   return (
     <AppShell
@@ -157,52 +219,54 @@ function RelatoriosPage() {
         ))}
       </div>
 
-      {poucosPontos && (
-        <p className="mb-4 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-          Ainda há poucos dados neste período — os números tendem a ficar mais representativos com o
-          tempo de uso do sistema.
-        </p>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-56 w-full" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <MetricChart
+            title="Tempo médio até 1ª resposta"
+            unit=" min"
+            data={tempoResposta}
+            goodDirection="down"
+            color="var(--color-chart-1)"
+          />
+          <MetricChart
+            title="Resolvidas 100% pela IA"
+            unit="%"
+            data={resolvidoIA}
+            goodDirection="up"
+            chartType="bar"
+            color="var(--color-chart-2)"
+          />
+          <MetricChart
+            title="Documentos entregues no prazo"
+            unit="%"
+            data={documentosPrazo}
+            goodDirection="up"
+            color="var(--color-chart-3)"
+          />
+          <div className="rounded-xl border border-border bg-card p-5">
+            <p className="mb-3 text-sm text-muted-foreground">CSAT médio</p>
+            <EmptyState
+              icon={Smile}
+              title="Ainda não coletamos CSAT"
+              description="A pesquisa de satisfação pós-atendimento via WhatsApp é um agente proativo de uma fase futura do produto."
+            />
+          </div>
+          <MetricChart
+            title="Conversão de leads em reuniões"
+            unit="%"
+            data={conversaoLeads}
+            goodDirection="up"
+            chartType="bar"
+            color="var(--color-chart-5)"
+          />
+        </div>
       )}
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <MetricChart
-          title="Tempo médio até 1ª resposta"
-          unit=" min"
-          data={tempoResposta}
-          goodDirection="down"
-          color="var(--color-chart-1)"
-        />
-        <MetricChart
-          title="Resolvidas 100% pela IA"
-          unit="%"
-          data={resolvidoIA}
-          goodDirection="up"
-          chartType="bar"
-          color="var(--color-chart-2)"
-        />
-        <MetricChart
-          title="Documentos entregues no prazo"
-          unit="%"
-          data={documentosPrazo}
-          goodDirection="up"
-          color="var(--color-chart-3)"
-        />
-        <MetricChart
-          title="CSAT médio"
-          unit=" / 5"
-          data={csat}
-          goodDirection="up"
-          color="var(--color-chart-4)"
-        />
-        <MetricChart
-          title="Conversão de leads em reuniões"
-          unit="%"
-          data={conversaoLeads}
-          goodDirection="up"
-          chartType="bar"
-          color="var(--color-chart-5)"
-        />
-      </div>
     </AppShell>
   );
 }
