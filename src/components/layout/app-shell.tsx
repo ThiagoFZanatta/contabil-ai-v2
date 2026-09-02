@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -41,7 +41,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentStaff } from "@/hooks/use-current-staff";
 import { supabase } from "@/integrations/supabase/client";
-import { conversations } from "@/lib/mock-data";
 
 const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -75,10 +74,27 @@ export function AppShell({
   const navigate = useNavigate();
   const session = useCurrentStaff();
 
-  const queueCount =
-    session.status === "ready"
-      ? conversations.filter((c) => session.staff.departmentSlugs.includes(c.departamento)).length
-      : 0;
+  const [queueCount, setQueueCount] = useState(0);
+
+  useEffect(() => {
+    if (session.status !== "ready") return;
+    const { tenantId, departmentSlugs } = session.staff;
+    supabase
+      .from("escalations")
+      .select("conversation_id, is_overflow, departments(slug)")
+      .eq("tenant_id", tenantId)
+      .is("resolved_at", null)
+      .then(({ data }) => {
+        const seen = new Set<string>();
+        for (const e of data ?? []) {
+          const dept = e.departments as unknown as { slug: string } | null;
+          const matches = e.is_overflow || (dept && departmentSlugs.includes(dept.slug));
+          if (matches) seen.add(e.conversation_id);
+        }
+        setQueueCount(seen.size);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.status === "ready" ? session.staff.tenantId : null]);
 
   function isActive(to: string) {
     if (to === "/") return pathname === "/";

@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { Sparkles, X, FileText, MessageSquareText, Check, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { runCopilotAction } from "@/lib/copilot-actions";
 import { cn } from "@/lib/utils";
 
 interface LogEntry {
@@ -10,6 +13,13 @@ interface LogEntry {
   status: "aceita" | "editada" | "descartada";
 }
 
+type ActionKind = "Resumo" | "Sugestão de resposta";
+
+const ACTION_TYPE: Record<ActionKind, "resumir" | "sugerir_resposta"> = {
+  Resumo: "resumir",
+  "Sugestão de resposta": "sugerir_resposta",
+};
+
 /**
  * Widget flutuante do copiloto interno de IA (RF11 / RF12).
  * Nunca envia mensagem diretamente — toda sugestão é um rascunho editável
@@ -17,41 +27,55 @@ interface LogEntry {
  */
 export function CopilotWidget({
   context,
+  conversationId,
   onInsertDraft,
 }: {
   context: string;
+  conversationId?: string;
   onInsertDraft?: (text: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [draft, setDraft] = useState<{
-    tipo: "Resumo" | "Sugestão de resposta";
+    tipo: ActionKind;
     texto: string;
+    interactionId: string;
   } | null>(null);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [editing, setEditing] = useState(false);
 
-  function runAction(tipo: "Resumo" | "Sugestão de resposta") {
+  async function runAction(tipo: ActionKind) {
     setLoading(true);
     setDraft(null);
-    window.setTimeout(() => {
-      const texto =
-        tipo === "Resumo"
-          ? `Resumo gerado por IA: ${context} O contato busca uma resposta objetiva sobre o andamento do assunto e ainda não teve a dúvida resolvida.`
-          : `Sugestão gerada por IA: Olá! Verifiquei aqui sua situação e já te retorno com os detalhes. Consegue me confirmar mais um dado enquanto isso, para eu adiantar a análise?`;
-      setDraft({ tipo, texto });
+    try {
+      const result = await runCopilotAction({
+        data: { actionType: ACTION_TYPE[tipo], context, conversationId },
+      });
+      setDraft({ tipo, texto: result.suggestion, interactionId: result.interactionId });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Não foi possível gerar com a IA.");
+    } finally {
       setLoading(false);
-    }, 700);
+    }
   }
 
-  function decide(status: LogEntry["status"], texto?: string) {
+  async function decide(status: LogEntry["status"], texto?: string) {
     if (!draft) return;
-    setLog((prev) => [{ id: crypto.randomUUID(), tipo: draft.tipo, status }, ...prev]);
+    const finalText = texto ?? draft.texto;
+    setLog((prev) => [{ id: draft.interactionId, tipo: draft.tipo, status }, ...prev]);
     if (status !== "descartada" && draft.tipo === "Sugestão de resposta") {
-      onInsertDraft?.(texto ?? draft.texto);
+      onInsertDraft?.(finalText);
     }
     setDraft(null);
     setEditing(false);
+
+    const { error } = await supabase
+      .from("staff_copilot_interactions")
+      .update({ outcome: status, final_text: status === "descartada" ? null : finalText })
+      .eq("id", draft.interactionId);
+    if (error) {
+      toast.error("Não foi possível registrar a decisão sobre a sugestão.");
+    }
   }
 
   return (

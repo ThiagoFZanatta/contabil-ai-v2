@@ -685,6 +685,7 @@ export type Database = {
       document_submissions: {
         Row: {
           client_document_config_id: string;
+          due_date_at_submission: string | null;
           id: string;
           note: string;
           submitted_at: string;
@@ -692,6 +693,7 @@ export type Database = {
         };
         Insert: {
           client_document_config_id: string;
+          due_date_at_submission?: string | null;
           id?: string;
           note?: string;
           submitted_at?: string;
@@ -699,6 +701,7 @@ export type Database = {
         };
         Update: {
           client_document_config_id?: string;
+          due_date_at_submission?: string | null;
           id?: string;
           note?: string;
           submitted_at?: string;
@@ -786,9 +789,56 @@ export type Database = {
           },
         ];
       };
+      knowledge_base_chunks: {
+        Row: {
+          chunk_index: number;
+          content: string;
+          created_at: string;
+          document_id: string;
+          embedding: string;
+          id: string;
+          tenant_id: string;
+        };
+        Insert: {
+          chunk_index: number;
+          content: string;
+          created_at?: string;
+          document_id: string;
+          embedding: string;
+          id?: string;
+          tenant_id: string;
+        };
+        Update: {
+          chunk_index?: number;
+          content?: string;
+          created_at?: string;
+          document_id?: string;
+          embedding?: string;
+          id?: string;
+          tenant_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_base_chunks_document_id_fkey";
+            columns: ["document_id"];
+            isOneToOne: false;
+            referencedRelation: "knowledge_base_documents";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "knowledge_base_chunks_tenant_id_fkey";
+            columns: ["tenant_id"];
+            isOneToOne: false;
+            referencedRelation: "tenants";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       knowledge_base_documents: {
         Row: {
           created_at: string;
+          embedding_error: string | null;
+          embedding_status: string;
           file_name: string;
           file_type: string;
           id: string;
@@ -799,6 +849,8 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          embedding_error?: string | null;
+          embedding_status?: string;
           file_name: string;
           file_type: string;
           id?: string;
@@ -809,6 +861,8 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          embedding_error?: string | null;
+          embedding_status?: string;
           file_name?: string;
           file_type?: string;
           id?: string;
@@ -1326,6 +1380,35 @@ export type Database = {
         };
       };
       current_tenant_id: { Args: never; Returns: string };
+      match_knowledge_base_chunks: {
+        Args: {
+          p_tenant_id: string;
+          p_query_embedding: string;
+          p_match_count?: number;
+        };
+        Returns: {
+          document_id: string;
+          content: string;
+          file_name: string;
+          similarity: number;
+        }[];
+      };
+      report_first_response_time: {
+        Args: { p_period_days?: number };
+        Returns: { day: string; avg_minutes: number }[];
+      };
+      report_ia_resolution_rate: {
+        Args: { p_period_days?: number };
+        Returns: { day: string; pct_ia: number }[];
+      };
+      report_document_on_time_rate: {
+        Args: { p_period_days?: number };
+        Returns: { day: string; pct_on_time: number }[];
+      };
+      report_lead_conversion_rate: {
+        Args: { p_period_days?: number };
+        Returns: { day: string; pct_conversion: number }[];
+      };
     };
     Enums: {
       [_ in never]: never;
