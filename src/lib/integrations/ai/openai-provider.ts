@@ -1,9 +1,15 @@
-import type { AiAgentResult, AiProvider, AiTestResult } from "./types";
+import type { AiAgentResult, AiEmbedResult, AiProvider, AiTestResult } from "./types";
 
 export interface OpenAiConfig {
   apiKey: string;
   model?: string;
 }
+
+// Modelo de embedding fixo (RF07/RAG) — diferente do modelo de chat, não é
+// selecionável por tenant: é uma escolha de custo/infraestrutura da própria
+// migration de knowledge_base_chunks (coluna embedding vector(1536)), que
+// esse modelo precisa continuar batendo.
+const EMBEDDING_MODEL = "text-embedding-3-small";
 
 // Lista curada citada no PRD (seção 10.1, v1.5) — não um catálogo aberto de
 // todos os modelos da OpenAI. Mantida em código só para validar o valor
@@ -107,6 +113,35 @@ export function createOpenAiProvider(config: OpenAiConfig | null): AiProvider {
 
       const body = (await response.json()) as { id?: string };
       return { ok: true, detail: `Conectado ao modelo ${body.id ?? model}` };
+    },
+
+    async embed(texts: string[]): Promise<AiEmbedResult> {
+      if (!config) {
+        return { ok: false, error: "OpenAI não configurado para este tenant" };
+      }
+      if (texts.length === 0) {
+        return { ok: true, vectors: [] };
+      }
+
+      const response = await fetch("https://api.openai.com/v1/embeddings", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${config.apiKey}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ model: EMBEDDING_MODEL, input: texts }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        return { ok: false, error: `OpenAI API respondeu ${response.status}: ${errorBody}` };
+      }
+
+      const body = (await response.json()) as {
+        data?: Array<{ embedding: number[]; index: number }>;
+      };
+      const items = (body.data ?? []).slice().sort((a, b) => a.index - b.index);
+      return { ok: true, vectors: items.map((item) => item.embedding) };
     },
   };
 }

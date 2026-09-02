@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Database, Json } from "@/integrations/supabase/types";
 import type { AiToolDefinition } from "@/lib/integrations/ai/types";
+import { resolveAiProvider } from "@/lib/integrations/resolve.server";
 import { DEPARTMENT_SLUGS, fromBusinessHoursWallClock, type ToolContext } from "./types";
 
 // As 9 ferramentas do motor conversacional (PRD seção 10.2, RF03/04/05/06/
@@ -200,23 +201,20 @@ async function checkPendingDocuments(ctx: ToolContext): Promise<unknown> {
   return { documents };
 }
 
-// Sem pipeline de embeddings/pgvector ainda (RAG completo sobre
-// knowledge_base_documents é um gap documentado, não implementado nesta
-// etapa) — a busca aqui é lexical, só sobre o FAQ manual (RF07), que já
-// cobre o critério de aceite de "priorizar a base de conhecimento antes de
-// responder de forma genérica" para o caso mais comum (perguntas
-// frequentes).
-async function searchKnowledgeBase(ctx: ToolContext, input: unknown): Promise<unknown> {
-  const query = asString(asRecord(input)["query"])?.toLowerCase();
-  if (!query) return { results: [] };
-
+// Combina duas buscas: lexical sobre o FAQ manual (RF07, sempre disponível)
+// e semântica sobre os pedaços dos PDFs enviados (RF07, via
+// match_knowledge_base_chunks/pgvector — knowledge_base/ingest.server.ts
+// preenche knowledge_base_chunks no upload). A semântica é best-effort: se o
+// provider de IA do tenant não estiver configurado, ou a chamada de
+// embedding falhar, a função ainda retorna os resultados do FAQ.
+async function searchKnowledgeBaseFaq(ctx: ToolContext, query: string) {
   const { data } = await supabaseAdmin
     .from("knowledge_base_faq")
     .select("question, answer")
     .eq("tenant_id", ctx.tenantId);
 
   const terms = query.split(/\s+/).filter(Boolean);
-  const results = (data ?? [])
+  return (data ?? [])
     .map((faq) => {
       const haystack = `${faq.question} ${faq.answer}`.toLowerCase();
       const score = terms.filter((t) => haystack.includes(t)).length;
@@ -225,9 +223,41 @@ async function searchKnowledgeBase(ctx: ToolContext, input: unknown): Promise<un
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
-    .map((r) => r.faq);
+    .map((r) => ({ tipo: "faq" as const, pergunta: r.faq.question, resposta: r.faq.answer }));
+}
 
-  return { results };
+async function searchKnowledgeBaseDocuments(ctx: ToolContext, query: string) {
+  const ai = await resolveAiProvider(ctx.tenantId);
+  if (!ai.isConfigured()) return [];
+
+  const embedded = await ai.embed([query]);
+  if (!embedded.ok || embedded.vectors.length === 0) return [];
+
+  const queryEmbedding = `[${embedded.vectors[0]!.join(",")}]`;
+  const { data } = await supabaseAdmin.rpc("match_knowledge_base_chunks", {
+    p_tenant_id: ctx.tenantId,
+    p_query_embedding: queryEmbedding,
+    p_match_count: 5,
+  });
+
+  return (data ?? []).map((chunk) => ({
+    tipo: "documento" as const,
+    arquivo: chunk.file_name,
+    trecho: chunk.content,
+    similaridade: chunk.similarity,
+  }));
+}
+
+async function searchKnowledgeBase(ctx: ToolContext, input: unknown): Promise<unknown> {
+  const query = asString(asRecord(input)["query"])?.toLowerCase();
+  if (!query) return { results: [] };
+
+  const [faqResults, documentResults] = await Promise.all([
+    searchKnowledgeBaseFaq(ctx, query),
+    searchKnowledgeBaseDocuments(ctx, query),
+  ]);
+
+  return { results: [...faqResults, ...documentResults] };
 }
 
 interface BusyRange {

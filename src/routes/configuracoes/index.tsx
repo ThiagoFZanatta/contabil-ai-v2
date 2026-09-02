@@ -36,6 +36,7 @@ import {
   testOpenAiConnection,
   testWhatsAppConnection,
 } from "@/lib/integration-actions";
+import { processKnowledgeBaseDocumentAction } from "@/lib/knowledge-base-actions";
 import {
   OPENAI_CURATED_MODELS,
   type OpenAiCuratedModel,
@@ -149,6 +150,8 @@ interface KbDocumentRow {
   size_bytes: number;
   storage_path: string;
   created_at: string;
+  embedding_status: string;
+  embedding_error: string | null;
 }
 
 interface ConsentVersionRow {
@@ -471,7 +474,9 @@ function ConfiguracoesPage() {
   async function loadKbDocuments(id: string) {
     const { data } = await supabase
       .from("knowledge_base_documents")
-      .select("id, file_name, file_type, size_bytes, storage_path, created_at")
+      .select(
+        "id, file_name, file_type, size_bytes, storage_path, created_at, embedding_status, embedding_error",
+      )
       .eq("tenant_id", id)
       .order("created_at", { ascending: false });
     setKbDocs(data ?? []);
@@ -495,16 +500,28 @@ function ConfiguracoesPage() {
           toast.error(`Não foi possível enviar ${file.name}: ${uploadError.message}`);
           continue;
         }
-        const { error: insertError } = await supabase.from("knowledge_base_documents").insert({
-          tenant_id: tenantId,
-          file_name: file.name,
-          file_type: file.type || (file.name.split(".").pop() ?? "arquivo"),
-          size_bytes: file.size,
-          storage_path: path,
-          uploaded_by: session.staff.id,
-        });
-        if (insertError) {
+        const { data: inserted, error: insertError } = await supabase
+          .from("knowledge_base_documents")
+          .insert({
+            tenant_id: tenantId,
+            file_name: file.name,
+            file_type: file.type || (file.name.split(".").pop() ?? "arquivo"),
+            size_bytes: file.size,
+            storage_path: path,
+            uploaded_by: session.staff.id,
+          })
+          .select("id")
+          .single();
+        if (insertError || !inserted) {
           toast.error(`${file.name} foi enviado, mas houve um erro ao registrar o documento.`);
+          continue;
+        }
+        try {
+          await processKnowledgeBaseDocumentAction({ data: { documentId: inserted.id } });
+        } catch {
+          toast.error(
+            `${file.name} foi registrado, mas houve um erro ao processar para busca semântica.`,
+          );
         }
       }
       toast.success("Upload concluído.");
@@ -1267,6 +1284,31 @@ function ConfiguracoesPage() {
                             {new Date(doc.created_at).toLocaleDateString("pt-BR")}
                           </p>
                         </div>
+                        {doc.embedding_status === "pronto" ? (
+                          <Badge className="border border-success/30 bg-success/15 text-success">
+                            Busca semântica pronta
+                          </Badge>
+                        ) : doc.embedding_status === "processando" ? (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            <Loader2 className="mr-1 size-3 animate-spin" />
+                            Processando
+                          </Badge>
+                        ) : doc.embedding_status === "erro" ? (
+                          <Badge
+                            className="border border-destructive/30 bg-destructive/15 text-destructive"
+                            title={doc.embedding_error ?? undefined}
+                          >
+                            Erro ao processar
+                          </Badge>
+                        ) : doc.embedding_status === "nao_suportado" ? (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            Só PDFs têm busca semântica
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            Pendente
+                          </Badge>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"

@@ -20,6 +20,8 @@ export type AiAgentResult =
 
 export type AiTestResult = { ok: true; detail: string } | { ok: false; error: string };
 
+export type AiEmbedResult = { ok: true; vectors: number[][] } | { ok: false; error: string };
+
 export interface AiProvider {
   readonly name: string;
   isConfigured(): boolean;
@@ -29,4 +31,7 @@ export interface AiProvider {
     tools?: AiToolDefinition[];
   }): Promise<AiAgentResult>;
   testConnection(): Promise<AiTestResult>;
+  // RAG (RF07): embeddings dos pedaços de texto extraídos dos documentos da
+  // Base de Conhecimento, e da própria pergunta na hora da busca semântica.
+  embed(texts: string[]): Promise<AiEmbedResult>;
 }
