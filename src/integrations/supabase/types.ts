@@ -513,7 +513,9 @@ export type Database = {
       };
       contacts: {
         Row: {
+          archived_at: string | null;
           created_at: string;
+          email: string | null;
           id: string;
           name: string;
           tenant_id: string;
@@ -521,7 +523,9 @@ export type Database = {
           whatsapp_number: string;
         };
         Insert: {
+          archived_at?: string | null;
           created_at?: string;
+          email?: string | null;
           id?: string;
           name: string;
           tenant_id: string;
@@ -529,7 +533,9 @@ export type Database = {
           whatsapp_number: string;
         };
         Update: {
+          archived_at?: string | null;
           created_at?: string;
+          email?: string | null;
           id?: string;
           name?: string;
           tenant_id?: string;

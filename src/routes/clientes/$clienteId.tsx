@@ -4,15 +4,14 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowUpRight,
   Brain,
   Building2,
   CheckCircle2,
   Clock,
   FileText,
   FileUp,
-  Link2,
   Plus,
-  Search,
   Send,
   Trash2,
   UserPlus,
@@ -145,16 +144,6 @@ function ClienteDetalhePage() {
   const [newDocName, setNewDocName] = useState("");
   const [newDocPeriodicity, setNewDocPeriodicity] = useState<Periodicity>("mensal");
 
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [searchContato, setSearchContato] = useState("");
-  const [searchResults, setSearchResults] = useState<
-    { id: string; name: string; whatsapp: string }[]
-  >([]);
-  const [newContactMode, setNewContactMode] = useState(false);
-  const [newContactName, setNewContactName] = useState("");
-  const [newContactWhatsapp, setNewContactWhatsapp] = useState("");
-  const [roleLabel, setRoleLabel] = useState("");
-
   const overallStatus = useMemo(() => overallDocStatus(configs), [configs]);
 
   async function loadAll() {
@@ -196,7 +185,7 @@ function ClienteDetalhePage() {
           }),
       supabase
         .from("client_contact_links")
-        .select("contact_id, role_label, contacts(id, name, whatsapp_number)")
+        .select("contact_id, role_label, contacts(id, name, whatsapp_number, archived_at)")
         .eq("client_id", clienteId),
     ]);
 
@@ -260,20 +249,25 @@ function ClienteDetalhePage() {
     }
 
     setContacts(
-      (linkRows ?? []).map((l) => {
-        const contact = l.contacts as unknown as {
-          id: string;
-          name: string;
-          whatsapp_number: string;
-        } | null;
-        return {
-          contactId: l.contact_id,
-          name: contact?.name ?? "—",
-          whatsapp: contact?.whatsapp_number ?? "",
-          roleLabel: l.role_label,
-          otherClients: otherLinksByContact.get(l.contact_id) ?? [],
-        };
-      }),
+      (linkRows ?? [])
+        .filter((l) => {
+          const contact = l.contacts as unknown as { archived_at: string | null } | null;
+          return !contact?.archived_at;
+        })
+        .map((l) => {
+          const contact = l.contacts as unknown as {
+            id: string;
+            name: string;
+            whatsapp_number: string;
+          } | null;
+          return {
+            contactId: l.contact_id,
+            name: contact?.name ?? "—",
+            whatsapp: contact?.whatsapp_number ?? "",
+            roleLabel: l.role_label,
+            otherClients: otherLinksByContact.get(l.contact_id) ?? [],
+          };
+        }),
     );
   }
 
@@ -358,67 +352,6 @@ function ClienteDetalhePage() {
       return;
     }
     toast.success("Contexto salvo com sucesso.");
-  }
-
-  async function buscarContatos(term: string) {
-    setSearchContato(term);
-    if (!term || !tenantId) {
-      setSearchResults([]);
-      return;
-    }
-    const { data } = await supabase
-      .from("contacts")
-      .select("id, name, whatsapp_number")
-      .or(`name.ilike.%${term}%,whatsapp_number.ilike.%${term}%`)
-      .limit(10);
-    setSearchResults(
-      (data ?? []).map((d) => ({ id: d.id, name: d.name, whatsapp: d.whatsapp_number })),
-    );
-  }
-
-  async function vincularContatoExistente(contactId: string) {
-    const { error } = await supabase
-      .from("client_contact_links")
-      .insert({ client_id: clienteId, contact_id: contactId, role_label: roleLabel || "Contato" });
-    if (error) {
-      toast.error(
-        error.code === "23505"
-          ? "Esse contato já está vinculado."
-          : "Não foi possível vincular o contato.",
-      );
-      return;
-    }
-    toast.success("Contato vinculado a este cliente.");
-    closeLinkDialog();
-    await loadAll();
-  }
-
-  async function criarENovoContato() {
-    if (!tenantId || !newContactName || !newContactWhatsapp) return;
-    const { data: contact, error } = await supabase
-      .from("contacts")
-      .insert({ tenant_id: tenantId, name: newContactName, whatsapp_number: newContactWhatsapp })
-      .select("id")
-      .single();
-    if (error || !contact) {
-      toast.error(
-        error?.code === "23505"
-          ? "Já existe um contato com esse WhatsApp."
-          : "Não foi possível criar o contato.",
-      );
-      return;
-    }
-    await vincularContatoExistente(contact.id);
-  }
-
-  function closeLinkDialog() {
-    setLinkOpen(false);
-    setSearchContato("");
-    setSearchResults([]);
-    setNewContactMode(false);
-    setNewContactName("");
-    setNewContactWhatsapp("");
-    setRoleLabel("");
   }
 
   if (notFound) {
@@ -699,93 +632,15 @@ function ClienteDetalhePage() {
         </TabsContent>
 
         <TabsContent value="contatos" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Dialog
-              open={linkOpen}
-              onOpenChange={(o) => (o ? setLinkOpen(true) : closeLinkDialog())}
-            >
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Link2 /> Vincular contato
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Vincular contato</DialogTitle>
-                </DialogHeader>
-                {!newContactMode ? (
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        placeholder="Buscar por nome ou WhatsApp…"
-                        value={searchContato}
-                        onChange={(e) => buscarContatos(e.target.value)}
-                        className="pl-9"
-                      />
-                    </div>
-                    <Input
-                      placeholder="Papel (ex: Dono, Financeiro)"
-                      value={roleLabel}
-                      onChange={(e) => setRoleLabel(e.target.value)}
-                    />
-                    {searchResults.length > 0 && (
-                      <ul className="max-h-48 space-y-1 overflow-y-auto">
-                        {searchResults.map((r) => (
-                          <li key={r.id}>
-                            <button
-                              onClick={() => vincularContatoExistente(r.id)}
-                              className="flex w-full items-center justify-between rounded-md p-2 text-left text-sm hover:bg-accent cursor-pointer"
-                            >
-                              <span>{r.name}</span>
-                              <span className="text-xs text-muted-foreground">{r.whatsapp}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Um contato pode falar em nome de mais de um CNPJ. Todos os contatos vinculados
-                      têm as mesmas permissões.
-                    </p>
-                    <Button variant="ghost" size="sm" onClick={() => setNewContactMode(true)}>
-                      <UserPlus /> Criar novo contato
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <Input
-                      placeholder="Nome do contato"
-                      value={newContactName}
-                      onChange={(e) => setNewContactName(e.target.value)}
-                    />
-                    <Input
-                      placeholder="WhatsApp"
-                      value={newContactWhatsapp}
-                      onChange={(e) => setNewContactWhatsapp(e.target.value)}
-                    />
-                    <Input
-                      placeholder="Papel (ex: Dono, Financeiro)"
-                      value={roleLabel}
-                      onChange={(e) => setRoleLabel(e.target.value)}
-                    />
-                  </div>
-                )}
-                <DialogFooter>
-                  <Button variant="outline" onClick={closeLinkDialog}>
-                    Cancelar
-                  </Button>
-                  {newContactMode && (
-                    <Button
-                      disabled={!newContactName || !newContactWhatsapp}
-                      onClick={criarENovoContato}
-                    >
-                      Criar e vincular
-                    </Button>
-                  )}
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              Vínculos, edição e exclusão de contatos agora são feitos na tela de Contatos.
+            </p>
+            <Button variant="outline" asChild>
+              <Link to="/contatos" search={{ clientId: clienteId }}>
+                <ArrowUpRight /> Gerenciar contatos deste cliente
+              </Link>
+            </Button>
           </div>
 
           {contacts.length === 0 ? (
