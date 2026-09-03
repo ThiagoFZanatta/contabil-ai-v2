@@ -1,9 +1,11 @@
 # Status de implementação
 
 > Documento gerado para dar visibilidade do que já foi construído no repositório,
-> a partir do PRD (**referência vigente: v1.6** — não alterado por este
+> a partir do PRD (**referência vigente: v1.7** — não alterado por este
 > arquivo nem pelo trabalho descrito aqui). Reflete o estado da branch
-> `claude/criar-telas-prd-78u21w` até o PR #13 (`6d32819`, já mergeado).
+> `claude/criar-telas-prd-78u21w` até o PR #15 (ajustes de layout de
+> Clientes) mais o trabalho de RF13 (Gestão Unificada de Contatos) descrito
+> abaixo, ainda em PR aberto no momento deste registro.
 >
 > **Com RF06 e RF01 fechados, todos os requisitos funcionais do MVP
 > (RF01–RF11) estão implementados e ligados a dados reais** — RF12 segue
@@ -13,6 +15,14 @@
 > existentes para o sistema, fluxo de onboarding de novo tenant (só
 > quando a revenda começar) e a divergência `staff_availability`/
 > `staff_time_blocks` (bloqueia só uma fase futura do RF06, não o MVP).
+>
+> **RF13 (Gestão Unificada de Contatos)** não faz parte das 12 telas
+> originais do PRD v1.3. Foi solicitada pelo usuário como tela nova
+> (`/contatos`) a partir de uma referência visual, e existe hoje como
+> rascunho aprovado em sessão de deliberação (fora deste ambiente) — ainda
+> **não formalizada** no documento oficial do PRD. A formalização como
+> requisito funcional fica para uma v1.8, depois que esta implementação
+> for validada.
 
 ## Resumo por tela
 
@@ -25,6 +35,7 @@
 | 5 | Inbox de Conversas | ✅ Real | `src/routes/conversas/index.tsx` |
 | 6 | Agenda | ✅ Real | `src/routes/agenda/index.tsx` |
 | 7 | Funil de Leads | ✅ Real | `src/routes/leads/index.tsx` |
+| — | Contatos (RF13 — Gestão Unificada, fora das 12 telas originais) | ✅ Real | `src/routes/contatos/index.tsx` |
 | — | Integrações WhatsApp/IA, Base de Conhecimento, Consentimento, Templates, Agente de IA | ✅ Real | `src/routes/configuracoes/index.tsx` |
 | 9 | Relatórios e Métricas | ⚠️ Real, exceto CSAT (ver gaps) | `src/routes/relatorios/index.tsx` |
 | — | Motor de atendimento por IA (orquestrador + 9 ferramentas) | ✅ Real (OpenAI) | `src/lib/agent/` |
@@ -63,6 +74,10 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
 | #11 | Job agendado (`pg_cron`) que preenche `escalations.is_overflow` (RF05) |
 | #12 | RAG semântico (RF07), Copiloto interno com IA real (RF11), Inbox de Conversas com dados reais (Tela 5), Dashboard e Relatórios com dados reais (Telas 2 e 9) |
 | #13 | Lembrete automático de compromisso via WhatsApp (RF06) |
+| #14 | Ajuste de configuração (TTL do OTP de e-mail, RF01) documentado |
+| #15 | Ajustes de layout da tela de Clientes |
+| #16 | Fechado sem merge — primeira versão da tela de Contatos tinha problema de arquitetura (exclusão física apagava histórico de conversas via cascade); substituído pelo #17 abaixo |
+| #17 | Reconstrução da tela de Contatos como fonte única de gestão (`/contatos`), com arquivamento em vez de exclusão física quando há histórico, mais trigger de defesa em profundidade no banco |
 
 ## O que o PR #12 adicionou, em detalhe
 
@@ -142,6 +157,64 @@ painel do Lovable Cloud/Supabase Auth) estava em 3600s (1h) — descompasso
 com o que a tela prometia — e foi ajustado para 86400s (24h), fechando o
 requisito de ponta a ponta (código + configuração).
 
+## Gestão Unificada de Contatos (RF13) — `/contatos`
+
+> Não é uma das 12 telas originais do PRD v1.3; foi pedida pelo usuário
+> como ajuste de layout/visualização a partir de uma referência `.tsx`
+> anexada. RF13 existe hoje como rascunho aprovado em sessão de
+> deliberação (fora deste ambiente), ainda **não formalizado** no
+> documento oficial do PRD — a formalização fica para uma v1.8, depois
+> que esta implementação for validada. Um primeiro recorte (PR #16) foi
+> fechado sem merge por um problema de arquitetura: exclusão física de
+> contato cascateava para `conversations`/`consent_log`
+> (`on delete cascade`), apagando histórico de atendimento e prova de
+> consentimento LGPD sem aviso algum.
+
+- **Correção principal — arquivamento condicional em vez de exclusão
+  sempre física:** `contacts.archived_at` (nullable). Antes de excluir,
+  o app verifica se existe alguma `conversations.contact_id` para aquele
+  contato — se existir, só "Arquivar" fica disponível (preserva
+  histórico e consentimento); se não existir nenhuma conversa, a
+  exclusão física é permitida (contato cadastrado por engano, sem
+  histórico). Contato arquivado pode ser reativado. Validado
+  manualmente contra o banco real: exclusão física sem histórico,
+  bloqueio+arquivamento com histórico, e reativação — os três cenários
+  conferidos direto no Postgres antes de considerar o requisito fechado.
+- **Defesa em profundidade no banco:** a checagem acima existia só na UI
+  na primeira revisão do PR — RLS (`contacts_all_same_tenant`) sozinha
+  permite a qualquer staff do tenant excluir qualquer contato, então nada
+  impedia reproduzir o mesmo problema do PR #16 por uma chamada direta à
+  API, um bug futuro, ou uma tela nova que esquecesse de checar
+  `hasHistory`. Trigger `contacts_block_delete_with_history`
+  (`before delete on contacts`) bloqueia a exclusão física no próprio
+  banco sempre que existir `conversations.contact_id` para o contato,
+  mesmo padrão já usado para outras invariantes do schema
+  (`check_conversation_tenant`, `check_document_submission_tenant`,
+  `check_client_contact_link_same_tenant`). Validado tentando excluir
+  via SQL direto (bypassando a UI) um contato com conversa — rejeitado
+  pelo banco — e confirmando que a exclusão sem histórico e o
+  arquivamento (`update`, não afetado pelo trigger) continuam
+  funcionando normalmente.
+- **`/contatos` como fonte única:** a aba "Contatos" do detalhe do
+  cliente (`clientes/$clienteId.tsx`) virou somente leitura (grid de
+  cards com nome/papel/WhatsApp/badge multi-CNPJ) mais um botão
+  "Gerenciar contatos deste cliente" que leva para
+  `/contatos?clientId=<id>` — toda criação/edição/vínculo/arquivamento
+  agora vive só em `/contatos`, sem lógica duplicada entre as duas
+  telas.
+- **Filtro por cliente via URL:** `/contatos` aceita `clientId` via
+  `validateSearch` do TanStack Router; quando presente, pré-filtra a
+  lista e mostra um breadcrumb "Voltar para [Nome do Cliente]".
+- **Mantido do recorte anterior:** `contacts.email` (opcional, só
+  exibição/contato alternativo — o WhatsApp continua sendo o canal
+  exigido e o único que a IA usa), decisão de não adicionar Nome
+  Fantasia, consentimento LGPD somente leitura (calculado contra
+  `consent_policy_versions`/`consent_log`, nunca editável manualmente —
+  a constraint `consent_log.channel = 'whatsapp'` já impede fabricar
+  consentimento por outro canal). RLS: reaproveita
+  `contacts_all_same_tenant`/`client_contact_links_*_same_tenant`, sem
+  policy nova.
+
 ## Gaps conhecidos / fora de escopo deste pacote
 
 - **CSAT (Relatórios)** — não existe nenhuma coleta de satisfação no
@@ -176,4 +249,6 @@ requisito de ponta a ponta (código + configuração).
 20260902240000_document_submissions_due_date_snapshot.sql
 20260902250000_report_metrics.sql
 20260902260000_appointment_reminders.sql
+20260903190000_contacts_email_and_archiving.sql
+20260903200000_contacts_block_delete_with_history.sql
 ```

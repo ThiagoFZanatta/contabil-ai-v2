@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   MessagesSquare,
   Users,
+  Contact,
   CalendarDays,
   KanbanSquare,
   Settings,
@@ -46,6 +47,7 @@ const navItems = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/conversas", label: "Conversas", icon: MessagesSquare },
   { to: "/clientes", label: "Clientes", icon: Users },
+  { to: "/contatos", label: "Contatos", icon: Contact },
   { to: "/agenda", label: "Agenda", icon: CalendarDays },
   { to: "/leads", label: "Funil de leads", icon: KanbanSquare },
 ];
