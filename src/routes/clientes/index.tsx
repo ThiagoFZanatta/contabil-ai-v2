@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { AlertCircle, Plus, Search, Users } from "lucide-react";
+import { AlertCircle, ChevronRight, Plus, Search, Users, Users2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatusBadge } from "@/components/common/status-badge";
 import { EmptyState } from "@/components/common/empty-state";
@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -55,9 +56,12 @@ interface ClientRow {
   id: string;
   name: string;
   cnpj: string;
+  taxRegime: string;
   whatsappNumber: string;
   responsibleStaffId: string | null;
   status: DocStatus;
+  contactsCount: number;
+  clientSince: string;
 }
 
 function computeStatus(configs: { enabled: boolean; next_due_date: string | null }[]): DocStatus {
@@ -80,6 +84,7 @@ function ClientesPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<DocStatus | "todos">("todos");
+  const [regimeFilter, setRegimeFilter] = useState<(typeof taxRegimes)[number] | "todos">("todos");
 
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -95,7 +100,7 @@ function ClientesPage() {
     const [{ data: clientRows, error: clientsError }, { data: staffRows }] = await Promise.all([
       supabase
         .from("clients")
-        .select("id, name, cnpj, whatsapp_number, responsible_staff_id")
+        .select("id, name, cnpj, tax_regime, whatsapp_number, responsible_staff_id, created_at")
         .order("name"),
       supabase.from("staff").select("id, name"),
     ]);
@@ -105,9 +110,10 @@ function ClientesPage() {
       return;
     }
 
-    const { data: configRows } = await supabase
-      .from("client_document_config")
-      .select("client_id, enabled, next_due_date");
+    const [{ data: configRows }, { data: linkRows }] = await Promise.all([
+      supabase.from("client_document_config").select("client_id, enabled, next_due_date"),
+      supabase.from("client_contact_links").select("client_id"),
+    ]);
 
     const byClient = new Map<string, { enabled: boolean; next_due_date: string | null }[]>();
     for (const c of configRows ?? []) {
@@ -116,15 +122,23 @@ function ClientesPage() {
       byClient.set(c.client_id, list);
     }
 
+    const contactsByClient = new Map<string, number>();
+    for (const l of linkRows ?? []) {
+      contactsByClient.set(l.client_id, (contactsByClient.get(l.client_id) ?? 0) + 1);
+    }
+
     setStaffNames(Object.fromEntries((staffRows ?? []).map((s) => [s.id, s.name])));
     setClients(
       (clientRows ?? []).map((c) => ({
         id: c.id,
         name: c.name,
         cnpj: c.cnpj,
+        taxRegime: c.tax_regime,
         whatsappNumber: c.whatsapp_number,
         responsibleStaffId: c.responsible_staff_id,
         status: computeStatus(byClient.get(c.id) ?? []),
+        contactsCount: contactsByClient.get(c.id) ?? 0,
+        clientSince: c.created_at,
       })),
     );
   }
@@ -139,9 +153,10 @@ function ClientesPage() {
       const matchesQuery =
         !query || c.name.toLowerCase().includes(query.toLowerCase()) || c.cnpj.includes(query);
       const matchesStatus = statusFilter === "todos" || c.status === statusFilter;
-      return matchesQuery && matchesStatus;
+      const matchesRegime = regimeFilter === "todos" || c.taxRegime === regimeFilter;
+      return matchesQuery && matchesStatus && matchesRegime;
     });
-  }, [clients, query, statusFilter]);
+  }, [clients, query, statusFilter, regimeFilter]);
 
   async function handleCreate() {
     if (!tenantId || !name || !cnpj || !whatsapp) return;
@@ -202,6 +217,22 @@ function ClientesPage() {
               {f.label}
             </button>
           ))}
+          <Select
+            value={regimeFilter}
+            onValueChange={(v) => setRegimeFilter(v as (typeof taxRegimes)[number] | "todos")}
+          >
+            <SelectTrigger className="h-8 w-auto gap-1.5 text-xs">
+              <SelectValue placeholder="Regime tributário" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os regimes</SelectItem>
+              {taxRegimes.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="ml-2">
@@ -311,9 +342,13 @@ function ClientesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Empresa</TableHead>
+                <TableHead>CNPJ</TableHead>
+                <TableHead>Regime tributário</TableHead>
                 <TableHead>Responsável interno</TableHead>
+                <TableHead>Contatos</TableHead>
                 <TableHead>Status de documentos</TableHead>
-                <TableHead>WhatsApp</TableHead>
+                <TableHead>Cliente desde</TableHead>
+                <TableHead className="text-right">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -330,19 +365,41 @@ function ClientesPage() {
                           {c.name.slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{c.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{c.cnpj}</p>
-                      </div>
+                      <p className="truncate font-medium text-foreground">{c.name}</p>
                     </Link>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {c.cnpj}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="font-normal">
+                      {c.taxRegime}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {c.responsibleStaffId ? (staffNames[c.responsibleStaffId] ?? "—") : "—"}
                   </TableCell>
                   <TableCell>
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Users2 className="size-3.5" />
+                      {c.contactsCount}
+                    </span>
+                  </TableCell>
+                  <TableCell>
                     <StatusBadge status={c.status} />
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{c.whatsappNumber}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(c.clientSince).toLocaleDateString("pt-BR")}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Link
+                      to="/clientes/$clienteId"
+                      params={{ clienteId: c.id }}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      Configurar <ChevronRight className="size-3.5" />
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
