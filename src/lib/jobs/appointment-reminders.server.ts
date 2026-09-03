@@ -79,28 +79,39 @@ async function resolvePhoneNumber(recipient: Recipient): Promise<string | null> 
   return null;
 }
 
+// Retorna false só quando houve uma tentativa de envio real que falhou —
+// nesse caso o compromisso não deve ser marcado como processado (ver
+// runAppointmentReminders), pra ser tentado de novo na próxima execução do
+// cron em vez de silenciosamente desistir. Sem número de telefone não é uma
+// falha a re-tentar (não muda sozinho entre uma execução e outra).
 async function sendReminder(
   appt: DueAppointment,
   recipient: Recipient,
   whatsapp: WhatsAppProvider,
-): Promise<void> {
+): Promise<boolean> {
   const to = await resolvePhoneNumber(recipient);
-  if (!to) return;
+  if (!to) return true;
 
   const label = APPOINTMENT_TYPE_LABEL[appt.appointment_type] ?? "um compromisso";
   const text =
     `Lembrete: você tem ${label} agendado(a) para ${formatWallClock(appt.start_at)}` +
     `${appt.title ? ` — ${appt.title}` : ""}. Se precisar remarcar, é só nos avisar por aqui.`;
 
-  const conversationId = await findOrCreateConversation(appt.tenant_id, recipient);
   const result = await whatsapp.sendMessage({ to, text });
+  if (!result.ok) return false;
+
+  // Só registra a mensagem no histórico quando o envio realmente deu certo
+  // — gravar aqui mesmo em caso de falha faria a conversa mostrar um
+  // lembrete como entregue quando na verdade não chegou ao cliente.
+  const conversationId = await findOrCreateConversation(appt.tenant_id, recipient);
   await supabaseAdmin.from("messages").insert({
     tenant_id: appt.tenant_id,
     conversation_id: conversationId,
     sender: "ia",
     body: text,
-    provider_message_id: result.ok ? result.providerMessageId : null,
+    provider_message_id: result.providerMessageId,
   });
+  return true;
 }
 
 export async function runAppointmentReminders(): Promise<{ processed: number }> {
@@ -126,22 +137,31 @@ export async function runAppointmentReminders(): Promise<{ processed: number }> 
   let processed = 0;
   for (const appt of dueAppointments ?? []) {
     const whatsapp = await providerFor(appt.tenant_id);
+    let allSent = true;
+
     if (whatsapp.isConfigured()) {
       const recipients = await resolveRecipients(appt);
       for (const recipient of recipients) {
-        await sendReminder(appt, recipient, whatsapp);
+        const ok = await sendReminder(appt, recipient, whatsapp);
+        if (!ok) allSent = false;
       }
     }
 
-    // Marcado como processado mesmo sem provider configurado ou sem
-    // destinatário (compromisso puramente interno, sem client_id/lead_id) —
-    // evita reprocessar o mesmo compromisso a cada execução do job até ele
-    // sair da janela de 24h. Um tenant que configura o WhatsApp depois disso
-    // só perde o lembrete dos compromissos já dentro da janela nesse meio-tempo.
-    await supabaseAdmin
-      .from("appointments")
-      .update({ reminder_sent_at: now.toISOString() })
-      .eq("id", appt.id);
+    // Só marca como processado quando não houve falha real de envio — uma
+    // API fora do ar ou erro transitório mantém o compromisso elegível pra
+    // tentar de novo na próxima execução do cron, até o horário do
+    // compromisso passar (a query acima já para de trazê-lo depois disso,
+    // então não fica tentando pra sempre). Sem provider configurado, ou sem
+    // destinatário (compromisso puramente interno, sem client_id/lead_id),
+    // continua marcado como processado — nada disso muda sozinho entre uma
+    // execução e outra. Um tenant que configura o WhatsApp depois disso só
+    // perde o lembrete dos compromissos já dentro da janela nesse meio-tempo.
+    if (allSent) {
+      await supabaseAdmin
+        .from("appointments")
+        .update({ reminder_sent_at: now.toISOString() })
+        .eq("id", appt.id);
+    }
     processed++;
   }
 
