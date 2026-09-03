@@ -1,7 +1,7 @@
 # Status de implementação
 
 > Documento gerado para dar visibilidade do que já foi construído no repositório,
-> a partir do PRD (**referência vigente: v1.6** — não alterado por este
+> a partir do PRD (**referência vigente: v1.7** — não alterado por este
 > arquivo nem pelo trabalho descrito aqui). Reflete o estado da branch
 > `claude/criar-telas-prd-78u21w` até o PR #15 (ajustes de layout de
 > Clientes) mais o trabalho de RF13 (Gestão Unificada de Contatos) descrito
@@ -17,8 +17,12 @@
 > `staff_time_blocks` (bloqueia só uma fase futura do RF06, não o MVP).
 >
 > **RF13 (Gestão Unificada de Contatos)** não faz parte das 12 telas
-> originais do PRD v1.3, mas foi solicitada pelo usuário como tela nova
-> (`/contatos`) e formalizada como requisito funcional na v1.6.
+> originais do PRD v1.3. Foi solicitada pelo usuário como tela nova
+> (`/contatos`) a partir de uma referência visual, e existe hoje como
+> rascunho aprovado em sessão de deliberação (fora deste ambiente) — ainda
+> **não formalizada** no documento oficial do PRD. A formalização como
+> requisito funcional fica para uma v1.8, depois que esta implementação
+> for validada.
 
 ## Resumo por tela
 
@@ -72,8 +76,8 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
 | #13 | Lembrete automático de compromisso via WhatsApp (RF06) |
 | #14 | Ajuste de configuração (TTL do OTP de e-mail, RF01) documentado |
 | #15 | Ajustes de layout da tela de Clientes |
-| #16 | Fechado sem merge — primeira versão da tela de Contatos tinha problema de arquitetura (exclusão física apagava histórico de conversas via cascade); substituído pelo PR de RF13 abaixo |
-| RF13 | Reconstrução da tela de Contatos como fonte única de gestão (`/contatos`), com arquivamento em vez de exclusão física quando há histórico |
+| #16 | Fechado sem merge — primeira versão da tela de Contatos tinha problema de arquitetura (exclusão física apagava histórico de conversas via cascade); substituído pelo #17 abaixo |
+| #17 | Reconstrução da tela de Contatos como fonte única de gestão (`/contatos`), com arquivamento em vez de exclusão física quando há histórico, mais trigger de defesa em profundidade no banco |
 
 ## O que o PR #12 adicionou, em detalhe
 
@@ -157,9 +161,12 @@ requisito de ponta a ponta (código + configuração).
 
 > Não é uma das 12 telas originais do PRD v1.3; foi pedida pelo usuário
 > como ajuste de layout/visualização a partir de uma referência `.tsx`
-> anexada, e formalizada como RF13 na v1.6. Um primeiro recorte
-> (PR #16) foi fechado sem merge por um problema de arquitetura: exclusão
-> física de contato cascateava para `conversations`/`consent_log`
+> anexada. RF13 existe hoje como rascunho aprovado em sessão de
+> deliberação (fora deste ambiente), ainda **não formalizado** no
+> documento oficial do PRD — a formalização fica para uma v1.8, depois
+> que esta implementação for validada. Um primeiro recorte (PR #16) foi
+> fechado sem merge por um problema de arquitetura: exclusão física de
+> contato cascateava para `conversations`/`consent_log`
 > (`on delete cascade`), apagando histórico de atendimento e prova de
 > consentimento LGPD sem aviso algum.
 
@@ -173,6 +180,21 @@ requisito de ponta a ponta (código + configuração).
   manualmente contra o banco real: exclusão física sem histórico,
   bloqueio+arquivamento com histórico, e reativação — os três cenários
   conferidos direto no Postgres antes de considerar o requisito fechado.
+- **Defesa em profundidade no banco:** a checagem acima existia só na UI
+  na primeira revisão do PR — RLS (`contacts_all_same_tenant`) sozinha
+  permite a qualquer staff do tenant excluir qualquer contato, então nada
+  impedia reproduzir o mesmo problema do PR #16 por uma chamada direta à
+  API, um bug futuro, ou uma tela nova que esquecesse de checar
+  `hasHistory`. Trigger `contacts_block_delete_with_history`
+  (`before delete on contacts`) bloqueia a exclusão física no próprio
+  banco sempre que existir `conversations.contact_id` para o contato,
+  mesmo padrão já usado para outras invariantes do schema
+  (`check_conversation_tenant`, `check_document_submission_tenant`,
+  `check_client_contact_link_same_tenant`). Validado tentando excluir
+  via SQL direto (bypassando a UI) um contato com conversa — rejeitado
+  pelo banco — e confirmando que a exclusão sem histórico e o
+  arquivamento (`update`, não afetado pelo trigger) continuam
+  funcionando normalmente.
 - **`/contatos` como fonte única:** a aba "Contatos" do detalhe do
   cliente (`clientes/$clienteId.tsx`) virou somente leitura (grid de
   cards com nome/papel/WhatsApp/badge multi-CNPJ) mais um botão
@@ -228,4 +250,5 @@ requisito de ponta a ponta (código + configuração).
 20260902250000_report_metrics.sql
 20260902260000_appointment_reminders.sql
 20260903190000_contacts_email_and_archiving.sql
+20260903200000_contacts_block_delete_with_history.sql
 ```
