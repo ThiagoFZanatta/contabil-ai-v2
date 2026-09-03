@@ -3,8 +3,16 @@
 > Documento gerado para dar visibilidade do que já foi construído no repositório,
 > a partir do PRD (**referência vigente: v1.6** — não alterado por este
 > arquivo nem pelo trabalho descrito aqui). Reflete o estado da branch
-> `claude/criar-telas-prd-78u21w` até o PR #12 (`2647952`, já mergeado),
-> mais o PR #13 (lembrete automático de compromisso, RF06 — em revisão).
+> `claude/criar-telas-prd-78u21w` até o PR #13 (`6d32819`, já mergeado).
+>
+> **Com RF06 e RF01 fechados, todos os requisitos funcionais do MVP
+> (RF01–RF11) estão implementados e ligados a dados reais** — RF12 segue
+> intencionalmente fora do MVP (Fase 4). O que resta em aberto (seção
+> "Pontos em Aberto" da v1.6) não é mais código a construir: revisão
+> jurídica do texto de consentimento LGPD, migração dos clientes reais
+> existentes para o sistema, fluxo de onboarding de novo tenant (só
+> quando a revenda começar) e a divergência `staff_availability`/
+> `staff_time_blocks` (bloqueia só uma fase futura do RF06, não o MVP).
 
 ## Resumo por tela
 
@@ -54,7 +62,7 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
 | #10 | Motor de atendimento completo: troca para OpenAI, orquestrador real (`runAgentTurn`, 9 ferramentas), correções de fuso horário e do gate de consentimento |
 | #11 | Job agendado (`pg_cron`) que preenche `escalations.is_overflow` (RF05) |
 | #12 | RAG semântico (RF07), Copiloto interno com IA real (RF11), Inbox de Conversas com dados reais (Tela 5), Dashboard e Relatórios com dados reais (Telas 2 e 9) |
-| #13 *(em revisão)* | Lembrete automático de compromisso via WhatsApp (RF06) |
+| #13 | Lembrete automático de compromisso via WhatsApp (RF06) |
 
 ## O que o PR #12 adicionou, em detalhe
 
@@ -83,7 +91,7 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
   leads em reuniões), calculadas por functions SQL
   (`supabase/migrations/20260902250000_report_metrics.sql`).
 
-## Lembrete automático de compromisso (RF06) — PR #13, em revisão
+## Lembrete automático de compromisso (RF06) — PR #13, mergeado
 
 > Fecha uma das duas pendências que a v1.6 do PRD reclassificou como
 > bloqueio de Fase 1 (a outra é a checagem de conflito de agenda, que já
@@ -121,18 +129,18 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
   espírito de "URL do webhook cadastrada no painel da Meta" já exigido pelo
   RF03.
 
-## Expiração de link de convite/recuperação de senha (RF01)
+## Expiração de link de convite/recuperação de senha (RF01) — fechado
 
 > A outra pendência que a v1.6 do PRD reclassificou como bloqueio de Fase 1.
 
-Revisão de código confirma que já está coberta: `nova-senha.tsx` tem um
-estado dedicado de "Link expirado" (se a sessão não se estabelece a partir
-do token da URL em alguns segundos, mostra a tela de link expirado com
-CTA para solicitar um novo), e `esqueci-senha.tsx` já evita enumeração de
-e-mail e informa "o link expira em 24 horas". **Pendência operacional
-(fora do código):** o TTL real do link é uma configuração do projeto
-Supabase Auth (painel), não algo que uma migration ou consulta SQL
-confirme — vale conferir em Authentication → Email se está de fato em 24h.
+`nova-senha.tsx` tem um estado dedicado de "Link expirado" (se a sessão
+não se estabelece a partir do token da URL em alguns segundos, mostra a
+tela de link expirado com CTA para solicitar um novo), e `esqueci-senha.tsx`
+já evita enumeração de e-mail e informa "o link expira em 24 horas". O TTL
+real (Authentication → Email → "Tempo de expiração do OTP por e-mail",
+painel do Lovable Cloud/Supabase Auth) estava em 3600s (1h) — descompasso
+com o que a tela prometia — e foi ajustado para 86400s (24h), fechando o
+requisito de ponta a ponta (código + configuração).
 
 ## Gaps conhecidos / fora de escopo deste pacote
 
