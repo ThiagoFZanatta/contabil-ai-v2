@@ -18,6 +18,7 @@ import { Route as AgendaIndexRouteImport } from './routes/agenda/index'
 import { Route as ClientesIndexRouteImport } from './routes/clientes/index'
 import { Route as ClientesClienteIdRouteImport } from './routes/clientes/$clienteId'
 import { Route as ConfiguracoesIndexRouteImport } from './routes/configuracoes/index'
+import { Route as ContatosIndexRouteImport } from './routes/contatos/index'
 import { Route as ConversasIndexRouteImport } from './routes/conversas/index'
 import { Route as LeadsIndexRouteImport } from './routes/leads/index'
 import { Route as RelatoriosIndexRouteImport } from './routes/relatorios/index'
@@ -67,6 +68,11 @@ const ConfiguracoesIndexRoute = ConfiguracoesIndexRouteImport.update({
   path: '/configuracoes/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ContatosIndexRoute = ContatosIndexRouteImport.update({
+  id: '/contatos/',
+  path: '/contatos/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConversasIndexRoute = ConversasIndexRouteImport.update({
   id: '/conversas/',
   path: '/conversas/',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/agenda/': typeof AgendaIndexRoute
   '/clientes/': typeof ClientesIndexRoute
   '/configuracoes/': typeof ConfiguracoesIndexRoute
+  '/contatos/': typeof ContatosIndexRoute
   '/conversas/': typeof ConversasIndexRoute
   '/leads/': typeof LeadsIndexRoute
   '/relatorios/': typeof RelatoriosIndexRoute
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/agenda': typeof AgendaIndexRoute
   '/clientes': typeof ClientesIndexRoute
   '/configuracoes': typeof ConfiguracoesIndexRoute
+  '/contatos': typeof ContatosIndexRoute
   '/conversas': typeof ConversasIndexRoute
   '/leads': typeof LeadsIndexRoute
   '/relatorios': typeof RelatoriosIndexRoute
@@ -122,6 +130,7 @@ export interface FileRoutesById {
   '/agenda/': typeof AgendaIndexRoute
   '/clientes/': typeof ClientesIndexRoute
   '/configuracoes/': typeof ConfiguracoesIndexRoute
+  '/contatos/': typeof ContatosIndexRoute
   '/conversas/': typeof ConversasIndexRoute
   '/leads/': typeof LeadsIndexRoute
   '/relatorios/': typeof RelatoriosIndexRoute
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/agenda/'
     | '/clientes/'
     | '/configuracoes/'
+    | '/contatos/'
     | '/conversas/'
     | '/leads/'
     | '/relatorios/'
@@ -152,6 +162,7 @@ export interface FileRouteTypes {
     | '/agenda'
     | '/clientes'
     | '/configuracoes'
+    | '/contatos'
     | '/conversas'
     | '/leads'
     | '/relatorios'
@@ -166,6 +177,7 @@ export interface FileRouteTypes {
     | '/agenda/'
     | '/clientes/'
     | '/configuracoes/'
+    | '/contatos/'
     | '/conversas/'
     | '/leads/'
     | '/relatorios/'
@@ -181,6 +193,7 @@ export interface RootRouteChildren {
   AgendaIndexRoute: typeof AgendaIndexRoute
   ClientesIndexRoute: typeof ClientesIndexRoute
   ConfiguracoesIndexRoute: typeof ConfiguracoesIndexRoute
+  ContatosIndexRoute: typeof ContatosIndexRoute
   ConversasIndexRoute: typeof ConversasIndexRoute
   LeadsIndexRoute: typeof LeadsIndexRoute
   RelatoriosIndexRoute: typeof RelatoriosIndexRoute
@@ -251,6 +264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/contatos/': {
+      id: '/contatos/'
+      path: '/contatos'
+      fullPath: '/contatos/'
+      preLoaderRoute: typeof ContatosIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/conversas/': {
       id: '/conversas/'
       path: '/conversas'
@@ -285,6 +305,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgendaIndexRoute: AgendaIndexRoute,
   ClientesIndexRoute: ClientesIndexRoute,
   ConfiguracoesIndexRoute: ConfiguracoesIndexRoute,
+  ContatosIndexRoute: ContatosIndexRoute,
   ConversasIndexRoute: ConversasIndexRoute,
   LeadsIndexRoute: LeadsIndexRoute,
   RelatoriosIndexRoute: RelatoriosIndexRoute,
