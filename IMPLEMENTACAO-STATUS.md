@@ -1,9 +1,10 @@
 # Status de implementação
 
 > Documento gerado para dar visibilidade do que já foi construído no repositório,
-> a partir do PRD (`PRDAtendimentoIAWhatsApp.md` — **não alterado por este
-> arquivo nem pelo trabalho descrito aqui**). Reflete o estado da branch
-> `claude/criar-telas-prd-78u21w` até o commit `cedcd52` (PR #12, em revisão).
+> a partir do PRD (**referência vigente: v1.6** — não alterado por este
+> arquivo nem pelo trabalho descrito aqui). Reflete o estado da branch
+> `claude/criar-telas-prd-78u21w` até o PR #12 (`2647952`, já mergeado),
+> mais o PR #13 (lembrete automático de compromisso, RF06 — em revisão).
 
 ## Resumo por tela
 
@@ -23,6 +24,7 @@
 | — | Copiloto interno (RF11 — resumir / sugerir resposta) | ✅ Real | `src/components/common/copilot-widget.tsx`, `src/lib/copilot-actions.ts` |
 | — | RAG semântico sobre PDFs da Base de Conhecimento (RF07) | ✅ Real | `src/lib/knowledge-base/` |
 | — | Overflow de escalonamento (RF05) | ✅ Real (job agendado) | `supabase/migrations/20260902200000_escalation_overflow_job.sql` |
+| — | Lembrete automático de compromisso (RF06) | ✅ Real (job via cron externo) | `src/lib/jobs/appointment-reminders.server.ts` |
 
 Todas as telas do painel estão ligadas a dados reais do Supabase — não há
 mais nenhuma tela rodando sobre `mock-data.ts` (o arquivo hoje só guarda o
@@ -51,7 +53,8 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
 | #9 | Webhook que recebe mensagens do WhatsApp (RF03) |
 | #10 | Motor de atendimento completo: troca para OpenAI, orquestrador real (`runAgentTurn`, 9 ferramentas), correções de fuso horário e do gate de consentimento |
 | #11 | Job agendado (`pg_cron`) que preenche `escalations.is_overflow` (RF05) |
-| #12 *(em revisão)* | RAG semântico (RF07), Copiloto interno com IA real (RF11), Inbox de Conversas com dados reais (Tela 5), Dashboard e Relatórios com dados reais (Telas 2 e 9) |
+| #12 | RAG semântico (RF07), Copiloto interno com IA real (RF11), Inbox de Conversas com dados reais (Tela 5), Dashboard e Relatórios com dados reais (Telas 2 e 9) |
+| #13 *(em revisão)* | Lembrete automático de compromisso via WhatsApp (RF06) |
 
 ## O que o PR #12 adicionou, em detalhe
 
@@ -79,6 +82,57 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
   resposta, % resolvido só pela IA, % documentos no prazo, conversão de
   leads em reuniões), calculadas por functions SQL
   (`supabase/migrations/20260902250000_report_metrics.sql`).
+
+## Lembrete automático de compromisso (RF06) — PR #13, em revisão
+
+> Fecha uma das duas pendências que a v1.6 do PRD reclassificou como
+> bloqueio de Fase 1 (a outra é a checagem de conflito de agenda, que já
+> estava implementada desde o PR #5 via a constraint
+> `appointments_no_overlap_per_staff` — a v1.6 do PRD listava isso como
+> "não confirmado", mas o código já resolvia).
+>
+> **Revisão:** o primeiro commit deste trabalho tinha uma falha silenciosa —
+> quando o envio via WhatsApp falhava, o job gravava a mensagem no
+> histórico como se tivesse sido entregue e marcava o compromisso como
+> processado de qualquer forma, sem nunca tentar de novo. Corrigido: o job
+> só marca o compromisso como processado quando o envio realmente dá
+> certo para todos os destinatários; em caso de falha real, ele continua
+> elegível e é tentado de novo na próxima execução do cron, até o horário
+> do compromisso passar.
+
+- **O que faz:** varre `appointments` futuros sem `reminder_sent_at`, dentro
+  de uma janela fixa de 24h antes do início, e envia uma mensagem de
+  WhatsApp para cada contato vinculado ao cliente (ou ao lead) do
+  compromisso — reaproveitando `findOrCreateConversation` do webhook
+  (`meta-cloud-webhook.server.ts`) para registrar a mensagem no histórico da
+  conversa como qualquer outra.
+- **Por que não é um job pg_cron como o overflow do RF05:** enviar de
+  verdade depende de resolver o `WhatsAppProvider` e os segredos do tenant
+  (`tenant_integration_secrets`), algo que só o runtime da aplicação faz —
+  SQL puro dentro do Postgres não tem acesso a isso. Em vez disso, é um
+  endpoint HTTP (`POST /api/cron/appointment-reminders`, interceptado em
+  `src/server.ts`) autenticado por segredo compartilhado
+  (`authenticateCronRequest`/`LOVABLE_CRON_SECRET`, já gerado no projeto e
+  até agora sem nenhum endpoint usando).
+- **Pendência operacional (fora do código):** falta cadastrar, no
+  agendador externo (Lovable Cloud Cron), uma chamada periódica (sugestão:
+  a cada 15–30 min) para essa URL com o segredo configurado — isso não é
+  feito por migration nem por código, é configuração de painel, no mesmo
+  espírito de "URL do webhook cadastrada no painel da Meta" já exigido pelo
+  RF03.
+
+## Expiração de link de convite/recuperação de senha (RF01)
+
+> A outra pendência que a v1.6 do PRD reclassificou como bloqueio de Fase 1.
+
+Revisão de código confirma que já está coberta: `nova-senha.tsx` tem um
+estado dedicado de "Link expirado" (se a sessão não se estabelece a partir
+do token da URL em alguns segundos, mostra a tela de link expirado com
+CTA para solicitar um novo), e `esqueci-senha.tsx` já evita enumeração de
+e-mail e informa "o link expira em 24 horas". **Pendência operacional
+(fora do código):** o TTL real do link é uma configuração do projeto
+Supabase Auth (painel), não algo que uma migration ou consulta SQL
+confirme — vale conferir em Authentication → Email se está de fato em 24h.
 
 ## Gaps conhecidos / fora de escopo deste pacote
 
@@ -113,4 +167,5 @@ futuro não exige reescrever o motor de atendimento nem o copiloto.
 20260902230000_knowledge_base_semantic_search.sql
 20260902240000_document_submissions_due_date_snapshot.sql
 20260902250000_report_metrics.sql
+20260902260000_appointment_reminders.sql
 ```

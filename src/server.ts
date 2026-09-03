@@ -63,6 +63,25 @@ export default {
       }
     }
 
+    // Endpoint de cron (RF06 — lembrete automático de compromisso): chamado
+    // periodicamente por um agendamento externo (Lovable Cloud Cron), nunca
+    // pelo navegador — por isso a autenticação por segredo em vez de sessão
+    // de staff, mesmo padrão já gerado para isso em cron-auth.ts.
+    if (url.pathname === "/api/cron/appointment-reminders") {
+      const { authenticateCronRequest } = await import("./integrations/supabase/cron-auth");
+      const authError = await authenticateCronRequest(request);
+      if (authError) return authError;
+
+      try {
+        const { runAppointmentReminders } = await import("./lib/jobs/appointment-reminders.server");
+        const result = await runAppointmentReminders();
+        return Response.json({ ok: true, ...result });
+      } catch (error) {
+        console.error(error);
+        return new Response("Internal Server Error", { status: 500 });
+      }
+    }
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

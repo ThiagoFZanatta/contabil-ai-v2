@@ -114,7 +114,11 @@ async function findOrCreateParty(
   return { contactId: null, leadId: newLead.id };
 }
 
-async function findOrCreateConversation(
+// Exportada porque também é usada pelo job de lembrete de compromisso
+// (appointment-reminders.server.ts) — enviar um lembrete precisa da mesma
+// resolução "conversa existente ou nova" que o webhook já fazia para
+// mensagens recebidas.
+export async function findOrCreateConversation(
   tenantId: string,
   party: { contactId: string | null; leadId: string | null },
 ): Promise<string> {
